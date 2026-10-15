@@ -82,7 +82,7 @@ async function displayMessage(m: Message): Promise<Message> {
   try {
     content = await decryptText(key, m.content)
   } catch {
-    content = '🔒 mensagem ilegível'
+    content = '🔒 unreadable message'
   }
   decoded.set(m.id, content)
   return { ...m, content }
@@ -282,7 +282,7 @@ async function joinWorkspace(ticket: string): Promise<Workspace> {
 
 async function createChannel(name: string, kind: ChannelKind): Promise<Channel> {
   const wsId = app.currentWorkspaceId
-  if (wsId == null) throw new Error('Nenhum workspace selecionado')
+  if (wsId == null) throw new Error('No workspace selected')
   const ch = await apiCreateChannel(wsId, name, kind)
   app.workspaces = app.workspaces.map((w) =>
     w.id === wsId ? { ...w, channels: [...w.channels, ch] } : w,
@@ -307,7 +307,7 @@ async function bootstrap(): Promise<void> {
 }
 
 async function enter(): Promise<void> {
-  if (!app.identity) throw new Error('Sem identidade')
+  if (!app.identity) throw new Error('No identity')
   const [workspaces, sounds] = await Promise.all([
     listWorkspaces(),
     listSounds().catch(() => [] as Sound[]),

@@ -59,7 +59,7 @@
     try {
       await app.sendMessage(content, ids)
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha ao enviar'
+      error = e instanceof Error ? e.message : 'Failed to send'
     }
   }
 
@@ -80,7 +80,7 @@
         const a = await uploadFile(f)
         pending = [...pending, a]
       } catch (e) {
-        error = e instanceof Error ? e.message : 'Falha no upload'
+        error = e instanceof Error ? e.message : 'Upload failed'
       }
     }
     uploading = false
@@ -114,13 +114,13 @@
   class="composer"
   class:dragging
   role="group"
-  aria-label="Enviar mensagem"
+  aria-label="Send message"
   ondragover={onDragOver}
   ondragleave={() => (dragging = false)}
   ondrop={onDrop}
 >
   {#if dragging}
-    <div class="drop">Solte para anexar</div>
+    <div class="drop">Drop to attach</div>
   {/if}
 
   {#if pending.length > 0}
@@ -129,7 +129,7 @@
         <span class="chip">
           <span class="cname">{a.filename}</span>
           <small>{formatBytes(a.size)}</small>
-          <button type="button" aria-label="Remover anexo" onclick={() => remove(a.id)}>×</button>
+          <button type="button" aria-label="Remove attachment" onclick={() => remove(a.id)}>×</button>
         </span>
       {/each}
     </div>
@@ -142,7 +142,7 @@
   <div class="row">
     <label class="attach">
       <span aria-hidden="true">＋</span>
-      <span class="sr">Anexar arquivo</span>
+      <span class="sr">Attach file</span>
       <input type="file" multiple onchange={onFile} />
     </label>
 
@@ -151,18 +151,18 @@
       bind:value={text}
       onkeydown={onKeydown}
       oninput={pingTyping}
-      placeholder={`Mensagem em #${channelName}`}
+      placeholder={`Message in #${channelName}`}
       rows="1"
-      aria-label="Mensagem"
+      aria-label="Message"
     ></textarea>
 
-    <button class="send" aria-label="Enviar" disabled={!canSend} onclick={() => void send()}>
+    <button class="send" aria-label="Send" disabled={!canSend} onclick={() => void send()}>
       ➤
     </button>
   </div>
 
   {#if uploading}
-    <p class="hint">Enviando arquivo…</p>
+    <p class="hint">Uploading file…</p>
   {/if}
 </div>
 

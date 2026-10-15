@@ -168,20 +168,20 @@
   }
 </script>
 
-<aside class="panel" aria-label="Voz">
+<aside class="panel" aria-label="Voice">
   {#if !myPresence}
     <div class="empty">
       <span class="empty-icon">🎧</span>
-      <p>Você não está em um canal de voz.</p>
+      <p>You are not in a voice channel.</p>
     </div>
   {:else}
     <header class="head">
       <div class="title">
         <span class="glyph">🔊</span>
-        <strong>{myChannel?.name ?? 'Canal de voz'}</strong>
+        <strong>{myChannel?.name ?? 'Voice channel'}</strong>
       </div>
       <span class="status" class:on={connected}>
-        {connected ? 'Conectado' : 'Conectando…'}
+        {connected ? 'Connected' : 'Connecting…'}
       </span>
     </header>
 
@@ -192,7 +192,7 @@
     <div class="grid">
       <VideoTile
         stream={localPreview}
-        name={app.identity?.display_name ?? 'Você'}
+        name={app.identity?.display_name ?? 'You'}
         local={true}
         micMuted={!micOn}
         video={camOn}
@@ -222,8 +222,8 @@
         class="ctl"
         class:off={!micOn}
         aria-pressed={micOn}
-        aria-label={micOn ? 'Silenciar microfone' : 'Ativar microfone'}
-        title={micOn ? 'Silenciar microfone' : 'Ativar microfone'}
+        aria-label={micOn ? 'Mute microphone' : 'Unmute microphone'}
+        title={micOn ? 'Mute microphone' : 'Unmute microphone'}
         onclick={toggleMic}
       >
         {micOn ? '🎤' : '🔇'}
@@ -232,8 +232,8 @@
         class="ctl"
         class:off={deafened}
         aria-pressed={deafened}
-        aria-label={deafened ? 'Cancelar surdez' : 'Ensurdar'}
-        title={deafened ? 'Cancelar surdez' : 'Ensurdar'}
+        aria-label={deafened ? 'Undeafen' : 'Deafen'}
+        title={deafened ? 'Undeafen' : 'Deafen'}
         onclick={toggleDeafen}
       >
         {deafened ? '🔈' : '🔊'}
@@ -242,8 +242,8 @@
         class="ctl"
         class:on={camOn}
         aria-pressed={camOn}
-        aria-label={camOn ? 'Desligar câmera' : 'Ligar câmera'}
-        title={camOn ? 'Desligar câmera' : 'Ligar câmera'}
+        aria-label={camOn ? 'Turn off camera' : 'Turn on camera'}
+        title={camOn ? 'Turn off camera' : 'Turn on camera'}
         onclick={toggleCam}
       >
         📹
@@ -252,13 +252,13 @@
         class="ctl"
         class:on={screenOn}
         aria-pressed={screenOn}
-        aria-label={screenOn ? 'Parar compartilhamento' : 'Compartilhar tela'}
-        title={screenOn ? 'Parar compartilhamento' : 'Compartilhar tela'}
+        aria-label={screenOn ? 'Stop sharing' : 'Share screen'}
+        title={screenOn ? 'Stop sharing' : 'Share screen'}
         onclick={toggleScreen}
       >
         🖥️
       </button>
-      <button class="ctl danger" aria-label="Sair do canal de voz" title="Sair" onclick={leave}>
+      <button class="ctl danger" aria-label="Leave voice channel" title="Leave" onclick={leave}>
         ✖
       </button>
     </div>

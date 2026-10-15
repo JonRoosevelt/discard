@@ -1,44 +1,44 @@
-# Etapa 04 — Pivot para P2P (iroh)
+# Stage 04 — Pivot to P2P (iroh)
 
-## O que motivou
+## What motivated it
 
-Dois requisitos do usuário mudaram a arquitetura:
+Two user requirements changed the architecture:
 
-1. **Privacidade forte** e, explicitamente, **nenhum servidor central guardando mensagens** —
-   referência citada: `pears.com` / Keet ("the chat app that knows nothing").
-2. **Mensagens efêmeras**: "não temos interesse em guardar mensagens… expira com um dia".
+1. **Strong privacy** and, explicitly, **no central server storing messages** —
+   cited reference: `pears.com` / Keet ("the chat app that knows nothing").
+2. **Ephemeral messages**: "we have no interest in storing messages… it expires in a day".
 
-## Decisões (ADR)
+## Decisions (ADR)
 
-- **P2P com iroh** (stack Rust: QUIC/TLS1.3, NAT traversal, relays como fallback cifrado).
-- **Sem servidor de aplicação.** O que roda é um **nó local** por usuário, que serve a UI em localhost.
-- **Sem histórico.** Mensagens TTL = **24h** num buffer local; sem `iroh-docs`/CRDT, sem banco.
-- **Acesso por capability:** o convite é um **ticket autocontido** com o segredo do workspace.
-- **Mídia** por WebRTC mesh (DTLS-SRTP E2E), sinalizada pelo overlay P2P.
-- Descartados: SQLite/SQLx, argon2/JWT, `iroh-docs`.
+- **P2P with iroh** (Rust stack: QUIC/TLS1.3, NAT traversal, relays as encrypted fallback).
+- **No application server.** What runs is a **local node** per user, which serves the UI on localhost.
+- **No history.** Messages TTL = **24h** in a local buffer; no `iroh-docs`/CRDT, no database.
+- **Capability-based access:** the invite is a **self-contained ticket** with the workspace secret.
+- **Media** over a WebRTC mesh (DTLS-SRTP E2E), signaled by the P2P overlay.
+- Discarded: SQLite/SQLx, argon2/JWT, `iroh-docs`.
 
-## Spike (Agent S) — de-riscagem da API
+## Spike (Agent S) — API de-risking
 
-Crate descartável `crates/iroh-spike` provou, rodando **offline em localhost**:
+The throwaway crate `crates/iroh-spike` proved, running **offline on localhost**:
 
 - gossip A→B (`broadcast`/`Event::Received`),
-- blob A→B (`add_bytes` → `downloader.download` → `get_bytes`, integridade ok),
-- `EndpointTicket` e `EndpointId`.
+- blob A→B (`add_bytes` → `downloader.download` → `get_bytes`, integrity ok),
+- `EndpointTicket` and `EndpointId`.
 
-**Versões resolvidas:** `iroh 1.3.0`, `iroh-gossip 0.101.0`, `iroh-blobs 0.103.1`,
+**Resolved versions:** `iroh 1.3.0`, `iroh-gossip 0.101.0`, `iroh-blobs 0.103.1`,
 `iroh-tickets 1.0.0`.
 
-**Gotchas críticos (API mudou vs. tutoriais antigos):**
+**Critical gotchas (API changed vs. old tutorials):**
 
-- Não existe mais `endpoint.add_node_addr`; o address book é `MemoryLookup` +
-  `.address_lookup(lookup).` e `lookup.add_endpoint_info(addr)`.
-- `Gossip::builder().spawn(ep)` sozinho não aceita conexões — precisa registrar no `Router`
+- `endpoint.add_node_addr` no longer exists; the address book is `MemoryLookup` +
+  `.address_lookup(lookup).` and `lookup.add_endpoint_info(addr)`.
+- `Gossip::builder().spawn(ep)` alone does not accept connections — it must be registered in the `Router`
   (`.accept(iroh_gossip::ALPN, gossip.clone())`).
-- `GossipReceiver` exige `futures_util::StreamExt` para `.next()`.
-- Presets: `N0` (DNS+relay públicos, precisa internet), `Minimal` (offline), `Empty` (falha).
-- Sempre envolver `joined()`/`next()` em timeout.
+- `GossipReceiver` requires `futures_util::StreamExt` for `.next()`.
+- Presets: `N0` (public DNS+relay, needs internet), `Minimal` (offline), `Empty` (fails).
+- Always wrap `joined()`/`next()` in a timeout.
 
-## Consequência
+## Consequence
 
-O protótipo das Etapas 02/03 (servidor central) foi **substituído**; ficou apenas como referência de
-UI e de estrutura Axum. O contrato foi reescrito como **v3** (`docs/CONTRACT.md`).
+The prototype from Stages 02/03 (central server) was **replaced**; it remained only as a reference for
+the UI and the Axum structure. The contract was rewritten as **v3** (`docs/CONTRACT.md`).

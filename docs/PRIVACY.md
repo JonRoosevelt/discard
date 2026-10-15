@@ -1,106 +1,106 @@
-# Discard — Privacidade e modelo de ameaça
+# Discard — Privacy and threat model
 
-Requisito de primeira classe: **não existe servidor central guardando mensagens**. Todo conteúdo
-vive nos dispositivos dos participantes e é replicado **peer-to-peer**. Este documento define o que
-prometemos, o que não prometemos, e por quê.
+First-class requirement: **there is no central server storing messages**. All content
+lives on the participants' devices and is replicated **peer-to-peer**. This document defines what we
+promise, what we do not promise, and why.
 
-## Princípios
+## Principles
 
-1. **Local-first.** O dispositivo do usuário é a fonte da verdade. Não há banco de dados central.
-2. **Sem servidor de conteúdo.** Nenhum operador vê mensagens, arquivos, áudio ou vídeo.
-3. **Criptografia ponta a ponta por padrão.** Não é opcional nem "enterprise-only".
-4. **Sem terceiros.** Nenhuma telemetria, analytics, CDN, fonte ou chamada a serviço externo.
-   Fontes são as do sistema; todo asset é local.
-5. **Minimização de metadados.** Coletamos o mínimo e não logamos conteúdo.
-6. **Verificável.** Só dependências que podem ser auditadas; sem binários opacos.
+1. **Local-first.** The user's device is the source of truth. There is no central database.
+2. **No content server.** No operator sees messages, files, audio or video.
+3. **End-to-end encryption by default.** It is not optional or "enterprise-only".
+4. **No third parties.** No telemetry, analytics, CDN, font or call to an external service.
+   Fonts are the system's; every asset is local.
+5. **Metadata minimization.** We collect the minimum and do not log content.
+6. **Verifiable.** Only dependencies that can be audited; no opaque binaries.
 
-## Retenção de dados
+## Data retention
 
-**Não armazenamos mensagens.** Elas são efêmeras: vivem no máximo **24 horas**, só no buffer local de
-cada nó (memória + cache local), e são descartadas automaticamente. Não há histórico durável, não há
-sincronização de histórico entre dispositivos, e nada é enviado para armazenamento. Anexos e áudios do
-soundboard seguem a mesma janela de 24h e são coletados (GC) depois. Só a **configuração do workspace**
-(nome, canais) persiste localmente, porque não é conteúdo de conversa.
+**We do not store messages.** They are ephemeral: they live at most **24 hours**, only in the local buffer of
+each node (memory + local cache), and are discarded automatically. There is no durable history, there is no
+history synchronization between devices, and nothing is sent for storage. Attachments and soundboard audios
+follow the same 24h window and are collected (GC) afterwards. Only the **workspace configuration**
+(name, channels) persists locally, because it is not conversation content.
 
-## Modelo de ameaça
+## Threat model
 
-| Adversário | O que quer | Como nos defendemos | O que resta |
+| Adversary | What they want | How we defend | What remains |
 |---|---|---|---|
-| Operador de um servidor central | Ler mensagens, perfil de uso | Não existe servidor de conteúdo | — |
-| MITM na rede | Ler/escrever tráfego | QUIC + TLS 1.3, chaves verificadas por identidade criptográfica | — |
-| Peer de um workspace | Ler canais sem acesso | Acesso ao conteúdo é uma **capability** (chave do documento); sem a chave, o dado é opaco | Um membro legítimo vê o que lhe foi concedido |
-| Operador do relay (fallback) | Correlacionar, ler conteúdo | Relay só encaminha **pacotes já cifrados**; nunca vê conteúdo | Vê EndpointIDs, IPs e timing (ver Metadados) |
-| Observador de rede / ISP | Metadados | QUIC cifrado; DHT/discovery configurável | Volume, timing, IPs de relay |
-| Peer malicioso | Expor IP, floodar | Conexões diretas são escolha do usuário; rate-limit e bloqueio local | IP é visível a quem se conecta direto (ver abaixo) |
+| Operator of a central server | Read messages, usage profile | There is no content server | — |
+| MITM on the network | Read/write traffic | QUIC + TLS 1.3, keys verified by cryptographic identity | — |
+| Peer of a workspace | Read channels without access | Access to content is a **capability** (document key); without the key, the data is opaque | A legitimate member sees what was granted to them |
+| Relay operator (fallback) | Correlate, read content | The relay only forwards **already encrypted packets**; it never sees content | Sees EndpointIDs, IPs and timing (see Metadata) |
+| Network observer / ISP | Metadata | Encrypted QUIC; configurable DHT/discovery | Volume, timing, relay IPs |
+| Malicious peer | Expose IP, flood | Direct connections are the user's choice; rate-limit and local blocking | IP is visible to those who connect directly (see below) |
 
-## Arquitetura de privacidade
+## Privacy architecture
 
-### Transporte — `iroh`
-Cada nó é um `iroh::Endpoint` identificado por uma **chave criptográfica** (ed25519), não por IP.
-Conectar é "discar por chave". Toda conexão é **QUIC + TLS 1.3**, autenticada e cifrada ponta a ponta.
-Relays públicos existem só como **fallback** para furar NAT e encaminham pacotes **já cifrados**;
-nenhum dado é armazenado na nuvem.
+### Transport — `iroh`
+Each node is an `iroh::Endpoint` identified by a **cryptographic key** (ed25519), not by IP.
+Connecting is "dialing by key". Every connection is **QUIC + TLS 1.3**, authenticated and encrypted end to end.
+Public relays exist only as a **fallback** for NAT traversal and forward **already encrypted** packets;
+no data is stored in the cloud.
 
-### Identidade
-A identidade do usuário é um **par de chaves gerado no dispositivo**. A chave privada **nunca sai do
-dispositivo** (IndexedDB no cliente de navegador; arquivo local com permissão `0600` no nó). Não há
-e-mail, telefone ou conta em servidor. O `display_name` é local e não autenticado.
-Backup = **exportação manual** de um arquivo de recuperação (a chave não é derivada da senha).
+### Identity
+The user's identity is a **keypair generated on the device**. The private key **never leaves the
+device** (IndexedDB in the browser client; local file with `0600` permission in the node). There is no
+email, phone or server account. The `display_name` is local and unauthenticated.
+Backup = **manual export** of a recovery file (the key is not derived from the password).
 
-### Confidencialidade do conteúdo
-- **Mensagens e estado:** vivem num **iroh Document** (KV multiwriter por CRDT). A identidade do
-  documento é a chave pública de um par que **controla a escrita**. Compartilhar o `DocTicket` é o ato
-  de conceder acesso. Sem o ticket, o documento é inalcançável.
-- **Arquivos:** vão para o **blobs store** content-addressed (BLAKE3). O hash só significa algo para
-  quem já tem acesso ao documento que o referencia.
-- **Mídia:** em mesh WebRTC, o áudio/vídeo é cifrado ponta a ponta por **DTLS-SRTP** entre os pares.
-  O nó local não é intermediário da mídia.
-- **Defesa em profundidade (implementada):** o corpo de cada mensagem é cifrado no navegador com
-  **AES-256-GCM** (WebCrypto) antes de sair da UI, de modo que o nó local e o banco guardem apenas
-  ciphertext. A chave é derivada do `secret` do workspace (que já vem no `DocTicket`) via
-  **HKDF-SHA256** com `info="discard-content-v1"`. Envelope: `"E1:" + base64(nonce(12) || ciphertext)`.
-  Peers que têm o segredo do workspace descriptografam; quem não tem vê conteúdo opaco. Se `secret`
-  não estiver disponível, o texto é enviado sem cifra (fallback de compatibilidade).
-  **Escopo:** protege o conteúdo **em trânsito e em repouso** (gossip, blobs, disco) e **contra peers
-  sem a chave** — não contra o próprio nó local: sendo seu, ele conhece o `secret` e não é um servidor
-  central. Os **bytes de anexos** ainda não são cifrados no cliente; vão como blob, cujo acesso depende
-  do ticket do workspace.
+### Content confidentiality
+- **Messages and state:** live in an **iroh Document** (multiwriter KV via CRDT). The document's
+  identity is the public key of a pair that **controls writing**. Sharing the `DocTicket` is the act
+  of granting access. Without the ticket, the document is unreachable.
+- **Files:** go to the content-addressed **blobs store** (BLAKE3). The hash only means something to
+  whoever already has access to the document that references it.
+- **Media:** in a WebRTC mesh, audio/video is encrypted end to end by **DTLS-SRTP** between the peers.
+  The local node is not a media intermediary.
+- **Defense in depth (implemented):** the body of each message is encrypted in the browser with
+  **AES-256-GCM** (WebCrypto) before leaving the UI, so that the local node and the database store only
+  ciphertext. The key is derived from the workspace `secret` (which already comes in the `DocTicket`) via
+  **HKDF-SHA256** with `info="discard-content-v1"`. Envelope: `"E1:" + base64(nonce(12) || ciphertext)`.
+  Peers that have the workspace secret decrypt it; those that do not see opaque content. If `secret`
+  is not available, the text is sent unencrypted (compatibility fallback).
+  **Scope:** protects the content **in transit and at rest** (gossip, blobs, disk) and **against peers
+  without the key** — not against the local node itself: being yours, it knows the `secret` and is not a central
+  server. The **attachment bytes** are not yet encrypted in the client; they go as a blob, whose access depends
+  on the workspace ticket.
 
-### Cifra em repouso
-- Nó local: store de documentos e blobs em disco; a chave de identidade protegida por permissões e,
-  opcionalmente, passphrase local.
-- Navegador: chave privada e material sensível em IndexedDB; nada em `localStorage` além do token de
-  sessão do nó local (que é efêmero e local).
+### Encryption at rest
+- Local node: document and blob store on disk; the identity key protected by permissions and,
+  optionally, a local passphrase.
+- Browser: private key and sensitive material in IndexedDB; nothing in `localStorage` beyond the session
+  token of the local node (which is ephemeral and local).
 
-## Metadados — o que ainda vaza (honestidade)
+## Metadata — what still leaks (honesty)
 
-1. **IP entre pares diretos.** Conexões diretas (escolha do produto, menor latência) revelam o IP a
-   quem você conecta. Quem quiser esconder o IP pode exigir relay; está previsto como opção por
-   workspace. **Não é o padrão.**
-2. **Descoberta.** Por padrão o `iroh` usa DNS/relay da n0 para localizar peers. Para privacidade
-   máxima: **self-host de relay** e/ou **lookup via Mainline DHT** (`BEP 44`), ambos configuráveis.
-3. **Timing e volume.** Um relay de fallback vê quando e quanto você troca, ainda que não veja o quê.
-4. **Presença.** Estar online e em um canal é visível para os membros daquele workspace.
+1. **IP between direct peers.** Direct connections (a product choice, lower latency) reveal the IP to
+   whoever you connect to. Those who want to hide their IP can require a relay; it is planned as an option per
+   workspace. **It is not the default.**
+2. **Discovery.** By default `iroh` uses n0's DNS/relay to locate peers. For maximum privacy:
+   **self-host a relay** and/or **lookup via Mainline DHT** (`BEP 44`), both configurable.
+3. **Timing and volume.** A fallback relay sees when and how much you exchange, even though it does not see what.
+4. **Presence.** Being online and in a channel is visible to the members of that workspace.
 
-## O que NÃO prometemos
+## What we do NOT promise
 
-- Anonimato de rede (o IP é exposto a peers diretos e a relays).
-- Resistência a um adversário que controle **todos** os seus peers e o seu dispositivo.
-- Que membros de um canal não vazem conteúdo (eles têm acesso legítimo por definição).
-- Deniability criptográfica (as entradas de documento são **assinadas** pelo autor).
+- Network anonymity (the IP is exposed to direct peers and relays).
+- Resistance to an adversary that controls **all** your peers and your device.
+- That members of a channel will not leak content (they have legitimate access by definition).
+- Cryptographic deniability (document entries are **signed** by the author).
 
-## Decisões que sustentam a privacidade
+## Decisions that sustain privacy
 
-- **Sem servidor central** — não há alvo a confiscar; não há "nós vemos suas mensagens".
-- **Capability-based access** — acesso é uma chave, não um registro de permissão num servidor.
-- **Zero terceiros** — nada de Google Fonts/Analytics/STUN do Google.
-- **Chaves só no dispositivo** — comprometer o servidor não compromete o usuário.
+- **No central server** — there is no target to seize; there is no "we see your messages".
+- **Capability-based access** — access is a key, not a permission record on a server.
+- **Zero third parties** — no Google Fonts/Analytics/STUN.
+- **Keys only on the device** — compromising the server does not compromise the user.
 
-## Checklist de verificação
+## Verification checklist
 
-- [ ] Nenhuma requisição de rede a domínios de terceiros (auditar `web/` e deps).
-- [ ] Chave privada nunca serializada para o nó/rede.
-- [ ] Sem log de conteúdo (mensagens, corpo de arquivos, SDP/ICE) em nível `info`.
-- [ ] Relays e lookup self-hostáveis por configuração.
-- [ ] Opção por workspace de "forçar relay / esconder IP".
-- [ ] Exportação/importação de backup de chave.
+- [ ] No network request to third-party domains (audit `web/` and deps).
+- [ ] Private key never serialized to the node/network.
+- [ ] No content log (messages, file bodies, SDP/ICE) at `info` level.
+- [ ] Relays and lookup self-hostable via configuration.
+- [ ] Per-workspace option to "force relay / hide IP".
+- [ ] Key backup export/import.

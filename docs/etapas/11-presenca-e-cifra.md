@@ -1,43 +1,43 @@
-# Etapa 11 — Presença por workspace + cifra de conteúdo
+# Stage 11 — Per-workspace presence + content encryption
 
-Duas pendências de produto atacadas em paralelo após o rename para **Discard**.
+Two product pending items tackled in parallel after the rename to **Discard**.
 
-## Presença de voz por workspace (Agent V)
+## Per-workspace voice presence (Agent V)
 
-**Problema:** a presença viajava no topic do canal de voz; só quem estava na chamada via quem estava
-nela — a sidebar não mostrava os membros de canais que você não entrou.
+**Problem:** presence traveled on the voice channel topic; only those who were in the call saw who was
+in it — the sidebar did not show the members of channels you had not joined.
 
-**Solução:** um **topic de tempo real por workspace**, derivado do segredo:
-`BLAKE3("discard-realtime-v1" || secret)`. O nó assina esse topic para cada workspace do usuário
-(no `Ready` e no heartbeat de 10s), com bootstrap nos peers conhecidos (owner do ticket + descobertos).
-Presença, **sinalização** e **soundboard** passam a trafegar nesse topic; **mensagens continuam nos
-topics por canal**. Filtros preservados (`signal` por destinatário, `sound_play` pelo canal em que se está).
+**Solution:** a **real-time topic per workspace**, derived from the secret:
+`BLAKE3("discard-realtime-v1" || secret)`. The node subscribes to this topic for each of the user's workspaces
+(in `Ready` and in the 10s heartbeat), with bootstrap on the known peers (ticket owner + discovered ones).
+Presence, **signaling** and **soundboard** now travel on this topic; **messages remain on the
+per-channel topics**. Filters preserved (`signal` by recipient, `sound_play` by the channel you are in).
 
-**Verificação (2 nós):** B entra no canal de voz, A fica fora — A **vê** B na sidebar
-(`voice_joined`/`voice_presence`); `signal` A→B e `sound_play` chegam; texto segue no topic do canal.
+**Verification (2 nodes):** B joins the voice channel, A stays out — A **sees** B in the sidebar
+(`voice_joined`/`voice_presence`); `signal` A→B and `sound_play` arrive; text continues on the channel topic.
 
-## Cifra de conteúdo no cliente (Agent C)
+## Content encryption in the client (Agent C)
 
-**Objetivo:** o nó/DB só guarda **ciphertext**; peers com o segredo do workspace decifram.
+**Goal:** the node/DB stores only **ciphertext**; peers with the workspace secret decrypt it.
 
-- **Backend:** `Workspace` ganhou `secret: Option<String>` (populado de `workspaces.rs` a partir do
-  store; é local e token-gated). `store.rs` mantém `secret: None` e a rota preenche.
+- **Backend:** `Workspace` gained `secret: Option<String>` (populated from `workspaces.rs` from the
+  store; it is local and token-gated). `store.rs` keeps `secret: None` and the route fills it in.
 - **Frontend (`lib/crypto.ts`, WebCrypto):**
   - `key = HKDF-SHA256(secret, info="discard-content-v1") → AES-256-GCM`.
   - Envelope: `content = "E1:" + base64(nonce[12] || ciphertext+tag)`.
-  - Sem prefixo `E1:` ⇒ texto claro (fallback/compat). `secret` nulo ⇒ envia sem cifrar.
-  - `state.svelte.ts` cifra no envio, decifra para exibir (cache por mensagem), chave por workspace.
-- **Anexos não cifrados** (stretch não feito): servidos direto por `/files/<hash>`. Documentado.
+  - Without the `E1:` prefix ⇒ plaintext (fallback/compat). Null `secret` ⇒ sends unencrypted.
+  - `state.svelte.ts` encrypts on send, decrypts for display (cache per message), key per workspace.
+- **Attachments not encrypted** (stretch not done): served directly by `/files/<hash>`. Documented.
 
-**Escopo do modelo de ameaça:** a cifra protege em trânsito/em repouso e contra peers sem a chave. O
-**nó local** (seu) conhece a chave — não é um servidor central. Ver `PRIVACY.md`.
+**Threat model scope:** the encryption protects in transit/at rest and against peers without the key. The
+**local node** (yours) knows the key — it is not a central server. See `PRIVACY.md`.
 
-## Config de dev
+## Dev config
 
-`DISCARD_TOKEN` permite **token fixo** (URL estável no `?k=`); `DISCARD_NO_OPEN=1` evita abrir o
-navegador. `DISCARD_WEB_DIST` aponta a UI para outro diretório.
+`DISCARD_TOKEN` allows a **fixed token** (stable URL in `?k=`); `DISCARD_NO_OPEN=1` avoids opening the
+browser. `DISCARD_WEB_DIST` points the UI to another directory.
 
-## Estado
+## Status
 
-`cargo build` e `npm run check`/`build` verdes com as duas mudanças juntas; CI (`release.yml`) gerando
-`Discard-*.dmg` e `discard-*.tar.gz`.
+`cargo build` and `npm run check`/`build` green with both changes together; CI (`release.yml`) generating
+`Discard-*.dmg` and `discard-*.tar.gz`.

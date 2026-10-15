@@ -9,16 +9,16 @@ function startOfDay(d: Date): number {
 export function formatTime(value: string | number | Date): string {
   const d = parseDate(value)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatDay(value: string | number | Date): string {
   const d = parseDate(value)
   if (Number.isNaN(d.getTime())) return ''
   const diff = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000)
-  if (diff === 0) return 'Hoje'
-  if (diff === 1) return 'Ontem'
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  if (diff === 0) return 'Today'
+  if (diff === 1) return 'Yesterday'
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 export function formatBytes(bytes: number): string {

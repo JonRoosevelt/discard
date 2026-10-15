@@ -28,7 +28,7 @@
         if (!cancelled) ticket = t
       })
       .catch((e) => {
-        if (!cancelled) loadError = e instanceof Error ? e.message : 'Falha ao obter ticket'
+        if (!cancelled) loadError = e instanceof Error ? e.message : 'Failed to get ticket'
       })
       .finally(() => {
         if (!cancelled) loading = false
@@ -45,7 +45,7 @@
       copied = true
       setTimeout(() => (copied = false), 1500)
     } catch {
-      loadError = 'Não foi possível copiar'
+      loadError = 'Could not copy'
     }
   }
 
@@ -53,7 +53,7 @@
     event.preventDefault()
     const value = join.trim()
     if (!value) {
-      joinError = 'Cole um ticket'
+      joinError = 'Paste a ticket'
       return
     }
     busy = true
@@ -62,7 +62,7 @@
       await app.joinWorkspace(value)
       onclose()
     } catch (e) {
-      joinError = e instanceof Error ? e.message : 'Falha ao entrar'
+      joinError = e instanceof Error ? e.message : 'Failed to join'
     } finally {
       busy = false
     }
@@ -76,37 +76,37 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="overlay">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Convite do workspace">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Workspace invite">
     <header>
-      <h2>Convite</h2>
-      <button class="close" aria-label="Fechar" onclick={onclose}>×</button>
+      <h2>Invite</h2>
+      <button class="close" aria-label="Close" onclick={onclose}>×</button>
     </header>
 
     <section>
-      <p class="label">Ticket de {workspace?.name ?? 'workspace'}</p>
+      <p class="label">Ticket for {workspace?.name ?? 'workspace'}</p>
       {#if loading}
-        <p class="hint">Carregando…</p>
+        <p class="hint">Loading…</p>
       {:else if loadError}
         <p class="error">{loadError}</p>
       {:else if ticket}
         <div class="ticket">
           <code>{ticket}</code>
-          <button class="copy" onclick={copy}>{copied ? 'Copiado' : 'Copiar'}</button>
+          <button class="copy" onclick={copy}>{copied ? 'Copied' : 'Copy'}</button>
         </div>
-        <p class="hint">O ticket concede acesso ao workspace. Compartilhe só com quem deve entrar.</p>
+        <p class="hint">The ticket grants access to the workspace. Share it only with those who should join.</p>
       {:else}
-        <p class="hint">Selecione um workspace para ver o ticket.</p>
+        <p class="hint">Select a workspace to see its ticket.</p>
       {/if}
     </section>
 
     <section>
       <form onsubmit={submitJoin}>
-        <label for="join-ticket">Entrar com um ticket</label>
-        <textarea id="join-ticket" bind:value={join} placeholder="cole o ticket aqui"></textarea>
+        <label for="join-ticket">Join with a ticket</label>
+        <textarea id="join-ticket" bind:value={join} placeholder="paste the ticket here"></textarea>
         {#if joinError}
           <p class="error">{joinError}</p>
         {/if}
-        <button type="submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
+        <button type="submit" disabled={busy}>{busy ? 'Joining…' : 'Join'}</button>
       </form>
     </section>
   </div>

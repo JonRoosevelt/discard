@@ -53,10 +53,10 @@
   <div class="bar">
     <span class="name">{name}</span>
     <span class="flags">
-      {#if micMuted}<span title="Microfone silenciado">🔇</span>{/if}
-      {#if screen}<span title="Compartilhando tela">🖥️</span>{/if}
-      {#if video}<span title="Câmera ligada">📹</span>{/if}
-      {#if deafened && !local}<span title="Áudio silenciado por você">🔈</span>{/if}
+      {#if micMuted}<span title="Microphone muted">🔇</span>{/if}
+      {#if screen}<span title="Sharing screen">🖥️</span>{/if}
+      {#if video}<span title="Camera on">📹</span>{/if}
+      {#if deafened && !local}<span title="Audio muted by you">🔈</span>{/if}
     </span>
   </div>
 </div>

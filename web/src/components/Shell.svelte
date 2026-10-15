@@ -20,14 +20,14 @@
   <div class="gate">
     <div class="gate-card">
       <h1>Discard</h1>
-      <p>Abra esta interface pelo nó local.</p>
+      <p>Open this interface through the local node.</p>
       <p class="hint">
-        O nó inicia a UI em <code>http://127.0.0.1:&lt;porta&gt;/?k=&lt;token&gt;</code>.
+        The node starts the UI at <code>http://127.0.0.1:&lt;port&gt;/?k=&lt;token&gt;</code>.
       </p>
     </div>
   </div>
 {:else if !app.booted}
-  <div class="gate"><p class="hint">Conectando ao nó local…</p></div>
+  <div class="gate"><p class="hint">Connecting to the local node…</p></div>
 {:else if app.entered}
   <div class="shell" class:incall={inCall}>
     <WorkspaceRail />

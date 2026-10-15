@@ -1,43 +1,43 @@
-# Etapa 05 — Nó local iroh (Agent N1)
+# Stage 05 — Local iroh node (Agent N1)
 
-## Escopo
+## Scope
 
-Reescrever `crates/server` como **nó local**: iroh (endpoint/gossip/blobs) + Axum em `127.0.0.1`
-servindo a SPA e a API local + WebSocket. Fonte da verdade: `crates/shared` v3.
+Rewrite `crates/server` as a **local node**: iroh (endpoint/gossip/blobs) + Axum on `127.0.0.1`
+serving the SPA and the local API + WebSocket. Source of truth: `crates/shared` v3.
 
-## Arquivos
+## Files
 
 `crates/server/src/`: `main.rs`, `config.rs`, `error.rs`, `identity.rs`, `ticket.rs`, `iroh_net.rs`,
 `retention.rs`, `store.rs`, `hub.rs`, `state.rs`, `ws.rs`, `media.rs`, `auth.rs`,
 `routes/{mod,identity,workspaces,channels,messages,uploads,files,sounds}.rs`.
-Removidos: `db.rs`, `models.rs`, `auth.rs` (antigo), `upload.rs`, `migrations/` e as deps
-`sqlx`/`argon2`/`jsonwebtoken`. Novas: `iroh 1.3`, `iroh-gossip 0.101`, `iroh-blobs 0.103`,
+Removed: `db.rs`, `models.rs`, `auth.rs` (old), `upload.rs`, `migrations/` and the deps
+`sqlx`/`argon2`/`jsonwebtoken`. New: `iroh 1.3`, `iroh-gossip 0.101`, `iroh-blobs 0.103`,
 `iroh-tickets 1.0`, `base64`, `hex`, `blake3`.
 
-## Destaques
+## Highlights
 
-- **Identidade = chave do endpoint.** Segredo ed25519 em `data/identity.key` (0600); `EndpointId`
-  é a identidade pública. `display_name` em `data/profile.json`. Backup exportável/importável.
-- **Sessão local:** `session_token` aleatório no boot; a UI é aberta em `?k=<token>`.
-- **Ticket de workspace** (`ticket.rs`): base64(JSON) `{id,name,owner_id,owner_name,secret,channels,
-  endpoint_ticket}`. Topic de canal = `BLAKE3(secret||channel_id)[0..32]`.
-- **Retenção 24h** (`retention.rs`): buffer por canal, dedupe por id, refcount de blobs por tag;
-  GC a cada 5 min remove mensagens e blobs expirados.
-- **Mensagem:** enviada → broadcast por gossip + buffer + push para a UI; recebida → dedupe, buffer,
-  download dos blobs anexados, push para a UI.
-- **Descoberta:** `presets::N0` (internet) ou `presets::Minimal` (`DISCARD_OFFLINE=1`), sempre com
-  `MemoryLookup` alimentado pelos endereços dos tickets.
+- **Identity = endpoint key.** ed25519 secret in `data/identity.key` (0600); `EndpointId`
+  is the public identity. `display_name` in `data/profile.json`. Exportable/importable backup.
+- **Local session:** random `session_token` on boot; the UI is opened at `?k=<token>`.
+- **Workspace ticket** (`ticket.rs`): base64(JSON) `{id,name,owner_id,owner_name,secret,channels,
+  endpoint_ticket}`. Channel topic = `BLAKE3(secret||channel_id)[0..32]`.
+- **24h retention** (`retention.rs`): per-channel buffer, dedupe by id, blob refcount by tag;
+  GC every 5 min removes expired messages and blobs.
+- **Message:** sent → broadcast via gossip + buffer + push to the UI; received → dedupe, buffer,
+  download of attached blobs, push to the UI.
+- **Discovery:** `presets::N0` (internet) or `presets::Minimal` (`DISCARD_OFFLINE=1`), always with
+  `MemoryLookup` fed by the addresses from the tickets.
 
-## Verificação (dois nós, `DISCARD_OFFLINE=1`)
+## Verification (two nodes, `DISCARD_OFFLINE=1`)
 
-- A cria workspace → **B faz join pelo ticket e passa a listar o workspace** (descoberta por ticket).
-- A e B assinam `#geral`; A envia → **B recebe por gossip** e o `GET .../messages` de B traz a mensagem.
-- A sobe um anexo → A envia → **B baixa o blob** e `GET /files/{hash}` de B é idêntico.
-- Segurança: sem/with token inválido → 401; SPA com deep link → 200; `/api/sounds` → lista.
+- A creates a workspace → **B joins by ticket and starts listing the workspace** (discovery by ticket).
+- A and B subscribe to `#geral`; A sends → **B receives via gossip** and B's `GET .../messages` returns the message.
+- A uploads an attachment → A sends → **B downloads the blob** and B's `GET /files/{hash}` is identical.
+- Security: without/invalid token → 401; SPA with deep link → 200; `/api/sounds` → list.
 
-## Desvios
+## Deviations
 
-- `Id = String` em todo o sistema (`"{ts_ms}-{author_short}"` para mensagens).
-- `/files/{hash}` não exige token (browsers não mandam `Authorization` em `<img>`).
-- Import de identidade reconstrói o endpoint iroh em runtime (UI precisa re-assinar).
-- Canais criados após o ticket não chegam a quem já entrou (ticket é snapshot) — item conhecido da v3.
+- `Id = String` throughout the system (`"{ts_ms}-{author_short}"` for messages).
+- `/files/{hash}` does not require a token (browsers do not send `Authorization` on `<img>`).
+- Identity import rebuilds the iroh endpoint at runtime (the UI needs to re-subscribe).
+- Channels created after the ticket do not reach those who already joined (the ticket is a snapshot) — a known v3 item.

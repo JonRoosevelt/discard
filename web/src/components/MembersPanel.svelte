@@ -6,8 +6,8 @@
   let members = $derived(app.members)
 </script>
 
-<aside class="members" aria-label="Membros">
-  <h2>Membros — {members.length}</h2>
+<aside class="members" aria-label="Members">
+  <h2>Members — {members.length}</h2>
   <div class="list">
     {#each members as m (m.id)}
       <div class="member">

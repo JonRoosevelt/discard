@@ -1,44 +1,44 @@
 # Discard
 
-Clone de Discord **minimalista, P2P e efêmero**.
+A **minimalist, P2P and ephemeral** Discord clone.
 
-- **Sem servidor central.** Cada usuário roda um **nó local** em Rust; os nós falam **iroh** (QUIC).
-- **Efêmero.** Mensagens e anexos **expiram em 24h** — nada de histórico durável.
-- **Workspaces** com canais de **texto** e **voz**; convite por **ticket** (capability).
-- **Voz/vídeo** por **WebRTC mesh** (E2E por DTLS-SRTP); sinalização pelo overlay P2P.
-- **Soundboard** com efeitos propagados por gossip.
-- **Privacidade forte**: cifra E2E por padrão, zero terceiros, chaves só no dispositivo.
-  Ver [`docs/PRIVACY.md`](docs/PRIVACY.md).
+- **No central server.** Each user runs a **local node** in Rust; nodes speak **iroh** (QUIC).
+- **Ephemeral.** Messages and attachments **expire in 24h** — no durable history.
+- **Workspaces** with **text** and **voice** channels; invite via **ticket** (capability).
+- **Voice/video** over a **WebRTC mesh** (E2E via DTLS-SRTP); signaling over the P2P overlay.
+- **Soundboard** with effects propagated via gossip.
+- **Strong privacy**: E2E encryption by default, zero third parties, keys only on the device.
+  See [`docs/PRIVACY.md`](docs/PRIVACY.md).
 
-## Arquitetura
+## Architecture
 
 ```
-[ Navegador A ] --localhost--> [ Nó A ] <== iroh (gossip + blobs) ==> [ Nó B ] --localhost--> [ Navegador B ]
+[ Browser A ] --localhost--> [ Node A ] <== iroh (gossip + blobs) ==> [ Node B ] --localhost--> [ Browser B ]
 ```
 
-- **Nó local** (`crates/server`, bin `discard-server`): identidade (ed25519), endpoint/gossip/blobs do
-  iroh, buffer local de 24h, e a API local (Axum) que serve a UI.
-- **UI** (`web/`, Svelte 5 + Vite): fala só com o nó local; mídia por WebRTC.
-- **Infra opcional** (não vê conteúdo): relay do iroh (fallback cifrado) e address lookup — ambos
-  self-hostáveis.
+- **Local node** (`crates/server`, bin `discard-server`): identity (ed25519), iroh
+  endpoint/gossip/blobs, local 24h buffer, and the local API (Axum) that serves the UI.
+- **UI** (`web/`, Svelte 5 + Vite): talks only to the local node; media over WebRTC.
+- **Optional infra** (does not see content): iroh relay (encrypted fallback) and address lookup — both
+  self-hostable.
 
-## Rodar
+## Run
 
 ```bash
-# nó local (abre a UI com o token em http://127.0.0.1:8787/?k=...)
+# local node (opens the UI with the token at http://127.0.0.1:8787/?k=...)
 cargo run -p server
 
-# UI em modo dev (opcional)
+# UI in dev mode (optional)
 cd web && npm install && npm run dev
 ```
 
-Variáveis: `DISCARD_ADDR` (`127.0.0.1:8787`), `DISCARD_DATA_DIR` (`data`), `DISCARD_OFFLINE`
-(`1` = sem relay/DNS, para testes locais).
+Variables: `DISCARD_ADDR` (`127.0.0.1:8787`), `DISCARD_DATA_DIR` (`data`), `DISCARD_OFFLINE`
+(`1` = no relay/DNS, for local tests).
 
 ## Stack
 
 Rust (Axum + iroh + iroh-gossip + iroh-blobs) · Svelte 5 (runes) + Vite + TypeScript · WebRTC · WebCrypto.
 
-## Documentação
+## Documentation
 
-Toda a documentação e o histórico de decisões por etapa estão em [`docs/`](docs/README.md).
+All documentation and the decision history per stage are in [`docs/`](docs/README.md).

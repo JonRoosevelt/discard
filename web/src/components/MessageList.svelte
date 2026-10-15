@@ -83,9 +83,9 @@
 <div class="list" bind:this={scroller} onscroll={onScroll} role="log" aria-live="polite">
   {#if app.messages.length === 0}
     <div class="welcome">
-      <h2>Bem-vindo a #{channelName}</h2>
-      <p>Este é o começo do canal. Diga olá!</p>
-      <p class="ephemeral">As mensagens desaparecem em 24h.</p>
+      <h2>Welcome to #{channelName}</h2>
+      <p>This is the beginning of the channel. Say hello!</p>
+      <p class="ephemeral">Messages disappear after 24h.</p>
     </div>
   {/if}
 

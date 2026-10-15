@@ -51,7 +51,7 @@
       await app.createChannel(n, kind)
       cancel()
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha ao criar canal'
+      error = e instanceof Error ? e.message : 'Failed to create channel'
     }
   }
 
@@ -69,7 +69,7 @@
   <header class="ws-header">
     <h1>{workspace?.name ?? 'Discard'}</h1>
     {#if workspace}
-      <button class="icon" aria-label="Convite do workspace" title="Convite" onclick={() => (invite = true)}>
+      <button class="icon" aria-label="Workspace invite" title="Invite" onclick={() => (invite = true)}>
         ✚
       </button>
     {/if}
@@ -79,8 +79,8 @@
   <div class="sections">
     <section>
       <div class="section-head">
-        <span>Canais de texto</span>
-        <button class="icon" aria-label="Criar canal de texto" onclick={() => startCreate('text')}>
+        <span>Text channels</span>
+        <button class="icon" aria-label="Create text channel" onclick={() => startCreate('text')}>
           +
         </button>
       </div>
@@ -97,8 +97,8 @@
             bind:value={name}
             onkeydown={onKeydown}
             maxlength="40"
-            placeholder="novo-canal"
-            aria-label="Nome do canal de texto"
+            placeholder="new-channel"
+            aria-label="Text channel name"
           />
         </form>
       {/if}
@@ -115,8 +115,8 @@
 
     <section>
       <div class="section-head">
-        <span>Canais de voz</span>
-        <button class="icon" aria-label="Criar canal de voz" onclick={() => startCreate('voice')}>
+        <span>Voice channels</span>
+        <button class="icon" aria-label="Create voice channel" onclick={() => startCreate('voice')}>
           +
         </button>
       </div>
@@ -133,8 +133,8 @@
             bind:value={name}
             onkeydown={onKeydown}
             maxlength="40"
-            placeholder="novo-canal"
-            aria-label="Nome do canal de voz"
+            placeholder="new-channel"
+            aria-label="Voice channel name"
           />
         </form>
       {/if}
@@ -159,8 +159,8 @@
   </div>
 {:else}
   <div class="empty-ws">
-    <p>Sem workspace ainda.</p>
-    <p class="hint">Use o <b>+</b> na barra à esquerda para <b>criar</b> um workspace ou <b>entrar com um ticket</b> de convite.</p>
+    <p>No workspace yet.</p>
+    <p class="hint">Use the <b>+</b> on the left rail to <b>create</b> a workspace or <b>join with an invite ticket</b>.</p>
   </div>
 {/if}
 

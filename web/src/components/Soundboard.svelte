@@ -62,7 +62,7 @@
       await app.reloadSounds()
       newName = ''
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Falha ao enviar som'
+      error = err instanceof Error ? err.message : 'Failed to upload sound'
     } finally {
       uploading = false
       input.value = ''
@@ -81,14 +81,14 @@
         max="1"
         step="0.05"
         bind:value={volume}
-        aria-label="Volume do soundboard"
+        aria-label="Soundboard volume"
       />
       <span aria-hidden="true">🔊</span>
     </label>
   </header>
 
   {#if !inVoice}
-    <p class="hint">Entre num canal de voz para tocar sons.</p>
+    <p class="hint">Join a voice channel to play sounds.</p>
   {/if}
 
   <div class="grid">
@@ -104,26 +104,26 @@
         {sound.emoji || '🔊'}
       </button>
     {:else}
-      <p class="empty">Sem sons ainda.</p>
+      <p class="empty">No sounds yet.</p>
     {/each}
   </div>
 
   <div class="upload">
-    <input class="emoji-in" bind:value={newEmoji} maxlength="4" aria-label="Emoji do som" />
+    <input class="emoji-in" bind:value={newEmoji} maxlength="4" aria-label="Sound emoji" />
     <input
       class="name-in"
       bind:value={newName}
       maxlength="24"
-      placeholder="nome do som"
-      aria-label="Nome do som"
+      placeholder="sound name"
+      aria-label="Sound name"
     />
     <button
       class="add"
       type="button"
       onclick={pickFile}
       disabled={uploading}
-      title="Enviar som"
-      aria-label="Enviar som"
+      title="Upload sound"
+      aria-label="Upload sound"
     >
       {uploading ? '…' : '＋'}
     </button>

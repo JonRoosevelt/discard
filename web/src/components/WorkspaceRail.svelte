@@ -66,7 +66,7 @@
   <button
     bind:this={addBtn}
     class="ws add"
-    aria-label="Adicionar workspace"
+    aria-label="Add workspace"
     aria-haspopup="menu"
     aria-expanded={menu}
     onclick={toggleMenu}
@@ -82,8 +82,8 @@
     role="menu"
     style="top: {menuPos.top}px; left: {menuPos.left}px"
   >
-    <button role="menuitem" onclick={openCreate}>Criar workspace</button>
-    <button role="menuitem" onclick={openInvite}>Entrar com ticket</button>
+    <button role="menuitem" onclick={openCreate}>Create workspace</button>
+    <button role="menuitem" onclick={openInvite}>Join with ticket</button>
   </div>
 {/if}
 

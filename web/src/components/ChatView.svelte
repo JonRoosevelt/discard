@@ -44,22 +44,22 @@
         <span class="glyph">{channel.kind === 'text' ? '#' : '🔊'}</span>
         <strong>{channel.name}</strong>
         {#if channel.kind === 'text'}
-          <span class="ephemeral" title="Mensagens desaparecem em 24h">24h</span>
+          <span class="ephemeral" title="Messages disappear after 24h">24h</span>
         {/if}
       {/if}
     </div>
     <div class="actions">
       {#if channel?.kind === 'voice'}
         {#if selfInVoice}
-          <button class="primary danger" onclick={leave}>Sair do canal</button>
+          <button class="primary danger" onclick={leave}>Leave channel</button>
         {:else}
-          <button class="primary" onclick={join}>Entrar no canal de voz</button>
+          <button class="primary" onclick={join}>Join voice channel</button>
         {/if}
       {/if}
       <button
         class="toggle"
         class:on={showMembers}
-        aria-label="Mostrar membros"
+        aria-label="Show members"
         aria-pressed={showMembers}
         onclick={() => (showMembers = !showMembers)}
       >
@@ -72,8 +72,8 @@
     <div class="center">
       {#if !channel}
         <div class="empty">
-          <h2>Sem canal selecionado</h2>
-          <p>Escolha um canal na barra lateral para conversar.</p>
+          <h2>No channel selected</h2>
+          <p>Choose a channel in the sidebar to chat.</p>
         </div>
       {:else if channel.kind === 'text'}
         <MessageList />
@@ -82,7 +82,7 @@
             <span class="dots"><i></i><i></i><i></i></span>
             <span>
               {typers.map((u) => u.display_name).join(', ')}
-              {typers.length === 1 ? 'está digitando…' : 'estão digitando…'}
+              {typers.length === 1 ? 'is typing…' : 'are typing…'}
             </span>
           {/if}
         </div>
@@ -91,7 +91,7 @@
         <div class="voice">
           <h2>{channel.name}</h2>
           {#if voiceMembers.length === 0}
-            <p>Ninguém por aqui ainda.</p>
+            <p>Nobody here yet.</p>
           {:else}
             <div class="grid">
               {#each voiceMembers as vm (vm.user.id)}
@@ -111,9 +111,9 @@
             </div>
           {/if}
           {#if selfInVoice}
-            <button class="primary danger" onclick={leave}>Sair do canal</button>
+            <button class="primary danger" onclick={leave}>Leave channel</button>
           {:else}
-            <button class="primary" onclick={join}>Entrar no canal de voz</button>
+            <button class="primary" onclick={join}>Join voice channel</button>
           {/if}
         </div>
       {/if}

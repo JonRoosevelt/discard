@@ -1,10 +1,10 @@
-# Etapa 08 — Soundboard (F3 + tech lead)
+# Stage 08 — Soundboard (F3 + tech lead)
 
 ## Assets (tech lead)
 
-Sete efeitos sintetizados com `ffmpeg` em `web/public/sounds/` (servidos em `/sounds/<arquivo>`):
+Seven effects synthesized with `ffmpeg` in `web/public/sounds/` (served at `/sounds/<file>`):
 
-| id | emoji | arquivo |
+| id | emoji | file |
 |---|---|---|
 | pop | 🔊 | pop.mp3 |
 | boom | 💥 | boom.mp3 |
@@ -18,19 +18,19 @@ Sete efeitos sintetizados com `ffmpeg` em `web/public/sounds/` (servidos em `/so
 
 `web/src/components/Soundboard.svelte`:
 
-- Grid compacto de botões (emoji + nome), volume com headroom (`new Audio(url)`).
-- Ao clicar: toca localmente e propaga `ws.send({op:'sound_play', channel_id, sound_id})` — onde
-  `channel_id` é o canal de voz em que **eu** estou; botões desabilitados com dica fora de chamada.
-- Handler próprio de `ws.on` toca `sound_play` recebido (só do meu canal) e ignora o eco (`by == meu id`).
-- **Upload de som custom:** `file`/`name`/`emoji` → `POST /api/sounds` (`uploadSound` em `api.ts`) →
-  `app.reloadSounds()`. Sons custom **não** expiram em 24h (são assets), fora do GC.
+- Compact grid of buttons (emoji + name), volume with headroom (`new Audio(url)`).
+- On click: plays locally and propagates `ws.send({op:'sound_play', channel_id, sound_id})` — where
+  `channel_id` is the voice channel **I** am in; buttons disabled with a hint outside a call.
+- Its own `ws.on` handler plays the received `sound_play` (only from my channel) and ignores the echo (`by == my id`).
+- **Custom sound upload:** `file`/`name`/`emoji` → `POST /api/sounds` (`uploadSound` in `api.ts`) →
+  `app.reloadSounds()`. Custom sounds do **not** expire in 24h (they are assets), outside the GC.
 
 ## Backend (N-voice)
 
 `crates/server/src/sounds.rs` (`SoundStore`, `data/sounds.json`) + `routes/sounds.rs`: builtin +
-uploads; upload persiste blob e metadata; `sounds.json` sobrevive a restart e é excluído do retention.
+uploads; upload persists blob and metadata; `sounds.json` survives a restart and is excluded from retention.
 
-## Verificação
+## Verification
 
 - `npm run check` 0/0, `npm run build` ok.
-- 7 builtin listados; upload → 8; persistiu após restart (teste do N-voice).
+- 7 builtin listed; upload → 8; persisted after restart (N-voice test).

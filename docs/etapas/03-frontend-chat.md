@@ -1,38 +1,38 @@
-# Etapa 03 — Wave 1: frontend shell + chat (Agent F1)
+# Stage 03 — Wave 1: frontend shell + chat (Agent F1)
 
-## Escopo
+## Scope
 
-Aplicação Svelte 5 completa para **chat**, com UX minimalista, densa e dark-first (referência: Discord),
-consumindo o contrato REST/WS do backend.
+A complete Svelte 5 application for **chat**, with a minimalist, dense, dark-first UX (reference: Discord),
+consuming the backend's REST/WS contract.
 
-## Arquivos
+## Files
 
 `web/src/`:
-- `lib/protocol.ts` — tipos TS espelhando `shared` (unions `SignalData`/`ClientEvent`/`ServerEvent`).
-- `lib/api.ts` — `token` (localStorage), `api<T>`, `Auth`, `uploadFile`, helpers REST.
-- `lib/ws.ts` — cliente WebSocket com reconexão exponencial (0,5s→30s) e fila offline.
-- `lib/state.svelte.ts` — store global com runes (`app`, `net`, `typing`).
+- `lib/protocol.ts` — TS types mirroring `shared` (`SignalData`/`ClientEvent`/`ServerEvent` unions).
+- `lib/api.ts` — `token` (localStorage), `api<T>`, `Auth`, `uploadFile`, REST helpers.
+- `lib/ws.ts` — WebSocket client with exponential reconnection (0.5s→30s) and offline queue.
+- `lib/state.svelte.ts` — global store with runes (`app`, `net`, `typing`).
 - `lib/format.ts` — `formatTime`, `formatDay`, `formatBytes`, `initials`, `avatarColor`, `isImage`, `parseDate`.
 - `components/`: `Login`, `Shell`, `WorkspaceRail`, `ChannelSidebar`, `ChatView`, `MessageList`,
   `Composer`, `MembersPanel`, `VoicePanel` (stub), `Soundboard` (stub).
-- `app.css` (tokens dark-first), `App.svelte`, `index.html`.
-- Removidos: `lib/Counter.svelte`, `assets/`.
+- `app.css` (dark-first tokens), `App.svelte`, `index.html`.
+- Removed: `lib/Counter.svelte`, `assets/`.
 
 ## Layout
 
-Rail de workspaces (72px) · sidebar de canais (240px) · chat (flex) · painel de voz (320px).
-Canais de voz mostram os membros conectados. Composer com auto-grow, Enter envia / Shift+Enter quebra,
-anexos por botão e drag&drop, throttle de "typing".
+Workspace rail (72px) · channel sidebar (240px) · chat (flex) · voice panel (320px).
+Voice channels show the connected members. Composer with auto-grow, Enter sends / Shift+Enter breaks,
+attachments via button and drag&drop, "typing" throttle.
 
-## Desvios / observações
+## Deviations / notes
 
-1. **`app.members`** é derivado (self + autores vistos em mensagens + membros em voz), pois não há
-   endpoint de membros. Ver pendência na Etapa 01.
-2. Exports extras (`net`, `typing`, `onReconnect`, `onStatus`) — aditivos, não quebram o shape do contrato.
-3. `selectChannel` só faz `subscribe` em canais de texto.
-4. `appendMessage` deduplica por `id` (REST + WS podem entregar a mesma mensagem).
+1. **`app.members`** is derived (self + authors seen in messages + members in voice), since there is no
+   members endpoint. See the open item in Stage 01.
+2. Extra exports (`net`, `typing`, `onReconnect`, `onStatus`) — additive, they do not break the contract shape.
+3. `selectChannel` only does `subscribe` on text channels.
+4. `appendMessage` deduplicates by `id` (REST + WS can deliver the same message).
 
-## Verificação
+## Verification
 
-- `npm run build` → built em ~631ms, 0 warnings.
+- `npm run build` → built in ~631ms, 0 warnings.
 - `npm run check` (svelte-check + tsc) → 0 errors, 0 warnings.

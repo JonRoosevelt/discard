@@ -93,7 +93,7 @@ export class VoiceSession {
         for (const peer of this.pcs.values()) void peer.audioSender?.replaceTrack(track).catch(() => {})
       }
     } catch {
-      this.error = 'Não foi possível acessar o microfone'
+      this.error = 'Could not access the microphone'
     }
     if (this.closed) return
     this.notify()
@@ -159,7 +159,7 @@ export class VoiceSession {
           }
         } catch {
           this.video = false
-          this.error = 'Não foi possível acessar a câmera'
+          this.error = 'Could not access the camera'
           this.notify()
           return
         }
@@ -182,7 +182,7 @@ export class VoiceSession {
     if (value) {
       const md = navigator.mediaDevices
       if (!md || typeof md.getDisplayMedia !== 'function') {
-        this.error = 'Compartilhamento de tela indisponível'
+        this.error = 'Screen sharing unavailable'
         this.notify()
         return
       }
@@ -204,7 +204,7 @@ export class VoiceSession {
         await this.applyVideoTrack(track)
       } catch {
         this.screen = false
-        this.error = 'Compartilhamento de tela cancelado'
+        this.error = 'Screen sharing cancelled'
       }
       this.notify()
       return

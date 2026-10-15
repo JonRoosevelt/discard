@@ -1,68 +1,68 @@
-# Etapa 09 — Integração e verificação final (tech lead)
+# Stage 09 — Integration and final verification (tech lead)
 
 ## Builds
 
-- `cargo build` — limpo (workspace: `shared`, `server`, `iroh-spike`).
-- `cd web && npm run check` — 0 erros, 0 warnings. `npm run build` — ok.
+- `cargo build` — clean (workspace: `shared`, `server`, `iroh-spike`).
+- `cd web && npm run check` — 0 errors, 0 warnings. `npm run build` — ok.
 
-## Smoke test E2E (dois nós)
+## E2E smoke test (two nodes)
 
-Provado no nó local (`DISCARD_OFFLINE=1`, portas e dirs distintos):
+Proven on the local node (`DISCARD_OFFLINE=1`, distinct ports and dirs):
 
-1. dois nós criam identidade;
-2. A cria workspace → B faz **join por ticket** e passa a listar o workspace;
-3. mensagem enviada em A aparece em B (gossip) e no buffer 24h;
-4. anexo replicado: B baixa o blob e `/files/{hash}` confere;
-5. voz: ambos entram no canal, presença cruzada, `signal` relayado, `sound_play` propagado;
-6. `/api/sounds` (7 builtin) e upload de som.
+1. two nodes create an identity;
+2. A creates a workspace → B does a **join by ticket** and starts listing the workspace;
+3. a message sent on A appears on B (gossip) and in the 24h buffer;
+4. attachment replicated: B downloads the blob and `/files/{hash}` matches;
+5. voice: both join the channel, cross presence, `signal` relayed, `sound_play` propagated;
+6. `/api/sounds` (7 builtin) and sound upload.
 
-## Validação visual (UI real servida pelo nó)
+## Visual validation (real UI served by the node)
 
-No navegador via `http://127.0.0.1:8787/?k=<token>`:
+In the browser via `http://127.0.0.1:8787/?k=<token>`:
 
-- tela de **identidade local** (criar/importar/exportar backup), com o texto "Mensagens desaparecem em 24h";
-- shell com rail, sidebar (Canais de texto / Canais de voz), chat com selo **24H** no header;
-- criar workspace → canais `#geral` e `🔊 Geral`;
-- menu criar/entrar com ticket, modal de convite;
-- entrar no canal de voz → painel com tile, controles e **soundboard com os 7 efeitos**; falha de mic
-  tratada de forma discreta.
+- **local identity** screen (create/import/export backup), with the text "Mensagens desaparecem em 24h";
+- shell with rail, sidebar (Text Channels / Voice Channels), chat with a **24H** badge in the header;
+- create workspace → channels `#geral` and `🔊 Geral`;
+- create/join menu with ticket, invite modal;
+- join the voice channel → panel with tile, controls and **soundboard with the 7 effects**; mic failure
+  handled discreetly.
 
-## Correções pós-validação
+## Post-validation fixes
 
-- **Layout responsivo (Shell):** o painel de voz reservava 320px **sempre** (mesmo fora de chamada),
-  esmagando o chat em janelas estreitas (72+240+320 = 632px). Agora o painel só existe quando o usuário
-  está num canal de voz (`class:incall`) e há breakpoints: `≤1100px` painel 280px; `≤880px` painel
-  escondido; `≤520px` sidebar escondida. O chat usa `minmax(0, 1fr)` e nunca colapsa.
+- **Responsive layout (Shell):** the voice panel reserved 320px **always** (even outside a call),
+  squeezing the chat in narrow windows (72+240+320 = 632px). Now the panel only exists when the user
+  is in a voice channel (`class:incall`) and there are breakpoints: `≤1100px` panel 280px; `≤880px` panel
+  hidden; `≤520px` sidebar hidden. The chat uses `minmax(0, 1fr)` and never collapses.
 
-## Como rodar
+## How to run
 
 ```bash
-# nó local (abre a UI com o token)
+# local node (opens the UI with the token)
 cargo run -p server
-# online (descoberta real): sem DISCARD_OFFLINE
+# online (real discovery): without DISCARD_OFFLINE
 # offline/local: DISCARD_OFFLINE=1
 ```
 
-Variáveis: `DISCARD_ADDR` (default `127.0.0.1:8787`), `DISCARD_DATA_DIR` (default `data`),
+Variables: `DISCARD_ADDR` (default `127.0.0.1:8787`), `DISCARD_DATA_DIR` (default `data`),
 `DISCARD_OFFLINE`.
 
-Desenvolvimento da UI:
+UI development:
 
 ```bash
-cd web && npm install && npm run dev   # 5173, proxy para o nó em 8787
+cd web && npm install && npm run dev   # 5173, proxy to the node on 8787
 ```
 
-## Limitações conhecidas / próximos passos
+## Known limitations / next steps
 
-- Canais criados **depois** do convite não chegam a quem já entrou (o ticket é um snapshot). Solução:
-  gossip de `workspace_update` assinado pelo owner.
-- Sem persistência de mensagens por design (TTL 24h); entrar num canal não traz backfill.
-- `presets::N0` usa DNS/relay públicos da n0; para privacidade máxima, **self-host** de relay e/ou
-  lookup por Mainline DHT (previsto).
-- Cifra de conteúdo no cliente (AES-GCM/WC) sobre o documento do gossip é opcional e ainda não ligada.
-- Empacotamento (binário + `web/dist` embutido) e ícone/serviço de usuário não foram feitos.
+- Channels created **after** the invite do not reach those who already joined (the ticket is a snapshot). Solution:
+  gossip of `workspace_update` signed by the owner.
+- No persistence of messages by design (TTL 24h); joining a channel does not bring backfill.
+- `presets::N0` uses n0's public DNS/relay; for maximum privacy, **self-host** a relay and/or
+  lookup via Mainline DHT (planned).
+- Content encryption in the client (AES-GCM/WC) over the gossip document is optional and not yet enabled.
+- Packaging (binary + embedded `web/dist`) and icon/user service were not done.
 
-## Decisão sobre "servidor"
+## Decision on "server"
 
-Não há servidor de aplicação. Só relay (fallback, cifrado, self-hostável) e address lookup. O binário
-`discard-server` é o **nó local** que cada usuário roda — não é um servidor central.
+There is no application server. Only relay (fallback, encrypted, self-hostable) and address lookup. The binary
+`discard-server` is the **local node** that each user runs — it is not a central server.

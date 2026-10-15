@@ -39,17 +39,17 @@ cat > "$appdir/discard.desktop" <<DESK
 [Desktop Entry]
 Type=Application
 Name=Discard
-Comment=Chat P2P, local-first e efêmero
+Comment=P2P chat, local-first and ephemeral
 Exec=$bindir/discard-app
 Icon=discard
 Terminal=false
 Categories=Network;Chat;
 DESK
 
-echo "Instalado: $bindir/discard"
-echo "Dados em:  $datadir"
-echo "Execute:   discard          (garanta ~/.local/bin no PATH)"
-echo "Ou abra:   Discard          (no menu de aplicativos)"
+echo "Installed: $bindir/discard"
+echo "Data in:   $datadir"
+echo "Run:       discard        (make sure ~/.local/bin is on PATH)"
+echo "Or open:   Discard        (from your application menu)"
 INSTALL
 
 chmod +x "${DIST}/${NAME}/install.sh"

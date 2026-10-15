@@ -1,54 +1,54 @@
-# Discard — Distribuição e instalação
+# Discard — Distribution and installation
 
-O Discard é um app **local-first**: cada usuário roda o seu próprio nó (`discard`) na máquina e a
-UI fala com ele em `http://127.0.0.1:<porta>`. Não há servidor central para instalar.
+Discard is a **local-first** app: each user runs their own node (`discard`) on the machine and the
+UI talks to it at `http://127.0.0.1:<port>`. There is no central server to install.
 
 ## Build
 
-Na raiz do repositório:
+At the repository root:
 
 ```sh
 cd web && npm ci && npm run build && cd ..
 cargo build --release --features embed-ui
 ```
 
-Isso gera **`target/release/discard`**. Com a feature `embed-ui`, o conteúdo de `web/dist` é
-**embutido no binário**: o resultado é um **arquivo único**, sem a pasta `web/dist` ao lado.
+This produces **`target/release/discard`**. With the `embed-ui` feature, the contents of `web/dist` are
+**embedded in the binary**: the result is a **single file**, without the `web/dist` folder alongside.
 
-Ao subir, o nó imprime:
+On startup, the node prints:
 
 ```
-Discard pronto: http://127.0.0.1:<porta>/?k=<token>
+Discard ready: http://127.0.0.1:<port>/?k=<token>
 ```
 
-e **abre o navegador** automaticamente. Defina `DISCARD_NO_OPEN=1` para não abrir.
+and **opens the browser** automatically. Set `DISCARD_NO_OPEN=1` to not open it.
 
-## Variáveis de ambiente
+## Environment variables
 
-| Variável | Padrão | Função |
+| Variable | Default | Purpose |
 |---|---|---|
-| `DISCARD_ADDR` | `127.0.0.1:8787` | endereço/porta do nó local |
-| `DISCARD_DATA_DIR` | `data` (relativo ao cwd) | identidade, workspaces, blobs e sons |
-| `DISCARD_OFFLINE` | desligado | `1` desabilita rede (iroh) |
-| `DISCARD_NO_OPEN` | desligado | `1` não abre o navegador |
-| `DISCARD_TOKEN` | gerado no boot | token de sessão da UI (`?k=` / `Authorization`) |
+| `DISCARD_ADDR` | `127.0.0.1:8787` | local node address/port |
+| `DISCARD_DATA_DIR` | `data` (relative to cwd) | identity, workspaces, blobs and sounds |
+| `DISCARD_OFFLINE` | off | `1` disables networking (iroh) |
+| `DISCARD_NO_OPEN` | off | `1` does not open the browser |
+| `DISCARD_TOKEN` | generated on boot | UI session token (`?k=` / `Authorization`) |
 
 ## Linux (omarchy / Arch)
 
-O binário é único e autossuficiente. Uma instalação simples:
+The binary is single and self-contained. A simple installation:
 
 ```sh
 install -Dm755 target/release/discard ~/.local/bin/discard
 ```
 
-Recomenda-se apontar os dados para um diretório estável (fora do cwd):
+It is recommended to point the data to a stable directory (outside the cwd):
 
 ```sh
 export DISCARD_DATA_DIR="$HOME/.local/share/discard"
 mkdir -p "$DISCARD_DATA_DIR"
 ```
 
-Atalho de desktop (`~/.local/share/applications/discard.desktop`):
+Desktop shortcut (`~/.local/share/applications/discard.desktop`):
 
 ```ini
 [Desktop Entry]
@@ -59,69 +59,69 @@ Terminal=false
 Categories=Network;InstantMessaging;
 ```
 
-`scripts/package-linux.sh` (dono: core) gera os pacotes portáveis em `dist/` (`.tar.gz` e/ou
-AppImage). Descompacte e rode o `discard`, ou execute o AppImage com permissão de execução.
+`scripts/package-linux.sh` (owner: core) produces the portable packages in `dist/` (`.tar.gz` and/or
+AppImage). Unpack and run the `discard`, or execute the AppImage with execute permission.
 
 ## macOS
 
-O empacotamento **precisa rodar no macOS** (não há cross-compile). O script
+Packaging **must run on macOS** (there is no cross-compile). The script
 `scripts/package-macos.sh`:
 
-1. garante `web/dist` e o binário release com `embed-ui`;
-2. monta `dist/macos/Discard.app`:
-   - `Contents/MacOS/Discard` — script launcher que define
-     `DISCARD_DATA_DIR="$HOME/Library/Application Support/Discard"`, cria o diretório e faz `exec`
-     no binário real (`Contents/MacOS/discard-bin`);
-   - `Contents/MacOS/discard-bin` — o binário release;
-   - `Contents/Info.plist` — `app.discard.desktop`, versão `0.1.0`, com as descrições de uso de
-     microfone e câmera;
-   - `Contents/Resources/icon.icns` — gerado de `assets/icon.png` com `sips` + `iconutil`.
-3. aplica assinatura **ad-hoc** (`codesign --sign -`, best-effort);
-4. gera `dist/Discard-0.1.0-macos.dmg`.
+1. ensures `web/dist` and the release binary with `embed-ui`;
+2. assembles `dist/macos/Discard.app`:
+   - `Contents/MacOS/Discard` — launcher script that sets
+     `DISCARD_DATA_DIR="$HOME/Library/Application Support/Discard"`, creates the directory and `exec`s
+     the real binary (`Contents/MacOS/discard-bin`);
+   - `Contents/MacOS/discard-bin` — the release binary;
+   - `Contents/Info.plist` — `app.discard.desktop`, version `0.1.0`, with the microphone and camera
+     usage descriptions;
+   - `Contents/Resources/icon.icns` — generated from `assets/icon.png` with `sips` + `iconutil`.
+3. applies an **ad-hoc** signature (`codesign --sign -`, best-effort);
+4. generates `dist/Discard-0.1.0-macos.dmg`.
 
-### Instalar
+### Install
 
-- **`.app`**: arraste `Discard.app` para `/Applications` (ou rode direto de `dist/macos`).
-- **`.dmg`**: dê duplo clique em `dist/Discard-0.1.0-macos.dmg` e arraste o app para `Applications`.
+- **`.app`**: drag `Discard.app` to `/Applications` (or run it directly from `dist/macos`).
+- **`.dmg`**: double-click `dist/Discard-0.1.0-macos.dmg` and drag the app to `Applications`.
 
-Os dados ficam em `~/Library/Application Support/Discard` (definido pelo launcher), e **não** no
-diretório do bundle.
+The data goes in `~/Library/Application Support/Discard` (set by the launcher), and **not** in the
+bundle directory.
 
-### Gatekeeper (importante)
+### Gatekeeper (important)
 
-O app é apenas assinado em **ad-hoc**, não é notarizado pela Apple. No primeiro uso o macOS pode
-bloquear com "não é possível verificar o desenvolvedor". Para abrir:
+The app is only **ad-hoc** signed, it is not notarized by Apple. On first use macOS may
+block it with "cannot verify the developer". To open it:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Discard.app
 ```
 
-ou clique com o botão direito no app > **Abrir** > **Abrir**. Também é possível ir em
-**Ajustes do Sistema > Privacidade e Segurança** e usar **Abrir Assim Mesmo**.
+or right-click the app > **Open** > **Open**. You can also go to
+**System Settings > Privacy & Security** and use **Open Anyway**.
 
-### Quarentena e microfone
+### Quarantine and microphone
 
-- Arquivos baixados (DMG) recebem o atributo `com.apple.quarantine`; o comando acima o remove.
-- Na primeira chamada de voz/vídeo, o macOS pede acesso a **microfone** e **câmera**. As descrições
-  ficam no `Info.plist`. Se você negar, reabilite em
-  **Ajustes do Sistema > Privacidade e Segurança > Microfone / Câmera**.
+- Downloaded files (DMG) receive the `com.apple.quarantine` attribute; the command above removes it.
+- On the first voice/video call, macOS asks for access to the **microphone** and **camera**. The descriptions
+  are in `Info.plist`. If you deny it, re-enable it in
+  **System Settings > Privacy & Security > Microphone / Camera**.
 
-### Distribuir de verdade
+### Distributing for real
 
-Assinatura ad-hoc só serve para uso local. Para distribuir sem avisos de segurança é preciso:
+Ad-hoc signing only works for local use. To distribute without security warnings you need:
 
-1. certificado **Developer ID Application**;
+1. a **Developer ID Application** certificate;
 2. `codesign --sign "Developer ID Application: ..." --options runtime Discard.app` (hardened runtime);
-3. `xcrun notarytool submit` e `xcrun stapler staple Discard.app`.
+3. `xcrun notarytool submit` and `xcrun stapler staple Discard.app`.
 
 ## CI (GitHub Actions)
 
-`.github/workflows/release.yml` roda em `workflow_dispatch` e em tags `v*`:
+`.github/workflows/release.yml` runs on `workflow_dispatch` and on `v*` tags:
 
-- **job `macos`** (`macos-latest`): build da UI, toolchain Rust stable, `scripts/package-macos.sh`
-  e upload do artefato `Discard-*.dmg`;
-- **job `linux`** (`ubuntu-latest`): build da UI, toolchain Rust stable, `scripts/package-linux.sh`
-  e upload de `dist/*` (`.tar.gz`/AppImage).
+- **job `macos`** (`macos-latest`): UI build, Rust stable toolchain, `scripts/package-macos.sh`
+  and upload of the `Discard-*.dmg` artifact;
+- **job `linux`** (`ubuntu-latest`): UI build, Rust stable toolchain, `scripts/package-linux.sh`
+  and upload of `dist/*` (`.tar.gz`/AppImage).
 
-Os artefatos ficam disponíveis na execução do workflow (aba **Actions**, seção **Artifacts**).
-Baixe, instale conforme a plataforma acima e, no macOS, remova a quarentena antes de abrir.
+The artifacts are available in the workflow run (the **Actions** tab, **Artifacts** section).
+Download, install according to the platform above and, on macOS, remove the quarantine before opening.

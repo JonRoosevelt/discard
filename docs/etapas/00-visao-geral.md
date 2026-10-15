@@ -1,80 +1,80 @@
-# Etapa 00 — Visão geral (P2P, efêmero, local-first)
+# Stage 00 — Overview (P2P, ephemeral, local-first)
 
-> Revisado duas vezes: primeiro para P2P (sem servidor de conteúdo), depois para **mensagens efêmeras
-> (24h)**. Ver `PRIVACY.md` e `CONTRACT.md` (v3).
+> Revised twice: first for P2P (no content server), then for **ephemeral
+> messages (24h)**. See `PRIVACY.md` and `CONTRACT.md` (v3).
 
-## Objetivo
+## Goal
 
-Clone de Discord **enxuto, P2P e efêmero**:
+A **lean, P2P and ephemeral** Discord clone:
 
-- **Workspaces** com canais de **texto** e **voz**.
-- **Chat** em tempo real por gossip; **mensagens expiram em 24h** (sem histórico durável).
-- **Upload de arquivos** por blobs content-addressed (TTL 24h).
-- **Áudio/vídeo em tempo real** por WebRTC mesh, sinalizado pelo overlay P2P.
-- **Efeitos sonoros** (soundboard) propagados por gossip.
-- **Privacidade forte**: sem servidor de conteúdo, cifra E2E, zero terceiros.
+- **Workspaces** with **text** and **voice** channels.
+- **Chat** in real time over gossip; **messages expire in 24h** (no durable history).
+- **File upload** via content-addressed blobs (TTL 24h).
+- **Real-time audio/video** over a WebRTC mesh, signaled by the P2P overlay.
+- **Sound effects** (soundboard) propagated over gossip.
+- **Strong privacy**: no content server, E2E encryption, zero third parties.
 
-## Arquitetura
+## Architecture
 
-Cada usuário roda um **nó local** em Rust; a **UI no navegador** é servida por esse nó e fala só com
-ele (localhost). Os nós se falam por **iroh** (QUIC + TLS 1.3, NAT traversal, relays só como fallback).
+Each user runs a **local node** in Rust; the **browser UI** is served by that node and talks only to
+it (localhost). The nodes talk to each other over **iroh** (QUIC + TLS 1.3, NAT traversal, relays only as fallback).
 
 ```
-[ Navegador A ] ──localhost──> [ Nó A ] <══ iroh ══> [ Nó B ] ──localhost──> [ Navegador B ]
+[ Browser A ] ──localhost──> [ Node A ] <══ iroh ══> [ Node B ] ──localhost──> [ Browser B ]
 ```
 
-| Necessidade | Protocolo iroh | Persistência |
+| Need | iroh protocol | Persistence |
 |---|---|---|
-| Tempo real (chat, presença, sinalização, soundboard) | **iroh-gossip** | nenhuma (efêmero, 24h em buffer local) |
-| Arquivos / áudios | **iroh-blobs** (BLAKE3) | blob com TTL 24h + GC |
-| Conexão, identidade, cifra, NAT | **iroh endpoint** | chave local |
+| Real time (chat, presence, signaling, soundboard) | **iroh-gossip** | none (ephemeral, 24h in local buffer) |
+| Files / audios | **iroh-blobs** (BLAKE3) | blob with 24h TTL + GC |
+| Connection, identity, encryption, NAT | **iroh endpoint** | local key |
 
-> Descartado em relação à v1/v2: **SQLite/SQLx**, **autenticação por senha** e **iroh-docs/CRDT**.
-> Não há histórico para replicar — só tempo real e um buffer de 24h.
+> Discarded relative to v1/v2: **SQLite/SQLx**, **password authentication** and **iroh-docs/CRDT**.
+> There is no history to replicate — just real time and a 24h buffer.
 
-## Infraestrutura necessária
+## Required infrastructure
 
-Nãohá servidor de aplicação. Só o **relay** (fallback NAT, encaminha cifrado) e o **address lookup**
-(DNS do iroh ou Mainline DHT) — ambos opcionais e self-hostáveis. Nada guarda conteúdo.
+There is no application server. Only the **relay** (NAT fallback, forwards encrypted traffic) and the
+**address lookup** (iroh DNS or Mainline DHT) — both optional and self-hostable. Nothing stores content.
 
-## Decisões (ADR resumido)
+## Decisions (summarized ADR)
 
-1. **Efêmero por design.** Mensagens TTL 24h, sem persistência nem sincronização de histórico.
-2. **iroh como camada P2P.** Discagem por chave, QUIC E2E, relays como fallback cifrado.
-3. **Capability-based access.** Acesso a um workspace é um **ticket autocontido** (contém o segredo e a
-   config). Sem ticket, sem acesso.
-4. **Mesh WebRTC para mídia** (até ~6 pessoas); ICE direto por decisão de produto.
-5. **Nó local em Rust** (não é servidor central): agente iroh + serve a UI + mantém o buffer 24h.
-6. **Frontend fino**, dono da criptografia de ponta (chave privada nunca vai ao nó).
+1. **Ephemeral by design.** Messages TTL 24h, no persistence or history synchronization.
+2. **iroh as the P2P layer.** Dialing by key, E2E QUIC, relays as encrypted fallback.
+3. **Capability-based access.** Access to a workspace is a **self-contained ticket** (contains the secret and the
+   config). No ticket, no access.
+4. **WebRTC mesh for media** (up to ~6 people); direct ICE by product decision.
+5. **Local node in Rust** (not a central server): iroh agent + serves the UI + keeps the 24h buffer.
+6. **Thin frontend**, owner of the end-to-end encryption (the private key never goes to the node).
 
-## Estrutura do repositório
+## Repository structure
 
 ```
 Discard/
-├── Cargo.toml                 # workspace Rust
+├── Cargo.toml                 # Rust workspace
 ├── crates/
-│   ├── shared/                # tipos do protocolo UI <-> nó (Id = String)
-│   ├── server/                # bin `discard-server` = NÓ LOCAL (Axum + iroh)
-│   └── iroh-spike/            # spike descartável para validar a API do iroh
+│   ├── shared/                # UI <-> node protocol types (Id = String)
+│   ├── server/                # bin `discard-server` = LOCAL NODE (Axum + iroh)
+│   └── iroh-spike/            # throwaway spike to validate the iroh API
 ├── web/                       # UI Svelte 5 + Vite
-├── docs/                      # documentação
-├── data/ , uploads/           # estado local do nó (runtime)
+├── docs/                      # documentation
+├── data/ , uploads/           # local node state (runtime)
 ```
 
-## Roadmap (ondas)
+## Roadmap (waves)
 
-| Onda | Escopo | Agentes |
+| Wave | Scope | Agents |
 |---|---|---|
-| 1 | UI shell + chat + API local (protótipo) | A, F1 — **feito, será adaptado** |
-| 2 | Spike iroh (gossip + blobs) | S |
-| 3 | Nó local iroh (identidade, gossip, blobs, TTL 24h) | N1 |
-| 4 | Frontend: identidade, tickets de convite, ids string | N2 |
-| 5 | Voz/vídeo e soundboard sobre gossip | N-voice, F2, F3 |
-| 6 | Integração, empacotamento, E2E | tech lead |
+| 1 | UI shell + chat + local API (prototype) | A, F1 — **done, will be adapted** |
+| 2 | iroh spike (gossip + blobs) | S |
+| 3 | Local iroh node (identity, gossip, blobs, TTL 24h) | N1 |
+| 4 | Frontend: identity, invite tickets, string ids | N2 |
+| 5 | Voice/video and soundboard over gossip | N-voice, F2, F3 |
+| 6 | Integration, packaging, E2E | tech lead |
 
-## Rodar (dev, alvo)
+## Run (dev, target)
 
 ```bash
-cargo run -p server          # nó local; abre http://127.0.0.1:8787/?k=<token>
-cd web && npm install && npm run dev   # UI em 5173 durante o desenvolvimento
+cargo run -p server          # local node; opens http://127.0.0.1:8787/?k=<token>
+cd web && npm install && npm run dev   # UI on 5173 during development
 ```

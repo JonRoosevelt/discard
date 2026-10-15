@@ -20,7 +20,7 @@
     event.preventDefault()
     const value = name.trim()
     if (!value) {
-      error = 'Dê um nome ao workspace'
+      error = 'Give the workspace a name'
       return
     }
     busy = true
@@ -29,7 +29,7 @@
       await app.createWorkspace(value)
       onclose()
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha ao criar'
+      error = e instanceof Error ? e.message : 'Failed to create'
     } finally {
       busy = false
     }
@@ -39,25 +39,25 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="overlay">
-  <div class="modal" role="dialog" aria-modal="true" aria-label="Criar workspace">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Create workspace">
     <header>
-      <h2>Criar workspace</h2>
-      <button class="close" aria-label="Fechar" onclick={onclose}>×</button>
+      <h2>Create workspace</h2>
+      <button class="close" aria-label="Close" onclick={onclose}>×</button>
     </header>
     <form onsubmit={submit}>
-      <label for="ws-name">Nome</label>
+      <label for="ws-name">Name</label>
       <input
         id="ws-name"
         bind:this={inputEl}
         bind:value={name}
         maxlength="40"
-        placeholder="Meu servidor"
+        placeholder="My server"
         autocomplete="off"
       />
       {#if error}
         <p class="error">{error}</p>
       {/if}
-      <button type="submit" disabled={busy}>{busy ? 'Criando…' : 'Criar'}</button>
+      <button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create'}</button>
     </form>
   </div>
 </div>

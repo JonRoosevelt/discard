@@ -91,11 +91,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(`/api${path}`, { ...init, headers })
   } catch {
-    throw new ApiError(0, 'Sem conexão com o nó local')
+    throw new ApiError(0, 'No connection to the local node')
   }
 
   if (!res.ok) {
-    let message = `Erro ${res.status}`
+    let message = `Error ${res.status}`
     try {
       const data = await res.json()
       if (data && typeof data.error === 'string') message = data.error
@@ -146,7 +146,7 @@ export async function downloadBackup(): Promise<Blob> {
   const t = token.get()
   if (t) headers.set('Authorization', `Bearer ${t}`)
   const res = await fetch(Identity.backupUrl(), { headers })
-  if (!res.ok) throw new ApiError(res.status, `Erro ${res.status}`)
+  if (!res.ok) throw new ApiError(res.status, `Error ${res.status}`)
   return res.blob()
 }
 

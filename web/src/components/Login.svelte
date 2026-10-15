@@ -16,7 +16,7 @@
     event.preventDefault()
     const name = displayName.trim()
     if (!name) {
-      error = 'Informe um nome de exibição'
+      error = 'Enter a display name'
       return
     }
     busy = true
@@ -24,7 +24,7 @@
     try {
       await createIdentity(name)
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha ao criar identidade'
+      error = e instanceof Error ? e.message : 'Failed to create identity'
     } finally {
       busy = false
     }
@@ -34,7 +34,7 @@
     event.preventDefault()
     const data = backup.trim()
     if (!data) {
-      error = 'Cole o conteúdo do backup'
+      error = 'Paste the backup contents'
       return
     }
     busy = true
@@ -42,7 +42,7 @@
     try {
       await importIdentity(data, passphrase.trim() || undefined)
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha ao importar backup'
+      error = e instanceof Error ? e.message : 'Failed to import backup'
     } finally {
       busy = false
     }
@@ -61,7 +61,7 @@
     try {
       await app.enter()
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha ao entrar'
+      error = e instanceof Error ? e.message : 'Failed to sign in'
     } finally {
       busy = false
     }
@@ -72,7 +72,7 @@
     try {
       await exportBackup()
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Falha ao exportar backup'
+      error = e instanceof Error ? e.message : 'Failed to export backup'
     }
   }
 </script>
@@ -82,7 +82,7 @@
     <h1>Discard</h1>
 
     {#if identity}
-      <p class="sub">Identidade local</p>
+      <p class="sub">Local identity</p>
       <div class="who">
         <span class="avatar" style="background: {avatarColor(identity.display_name)}">
           {initials(identity.display_name)}
@@ -94,52 +94,52 @@
       </div>
       <p class="note">
         {identity.has_backup
-          ? 'Você tem um backup desta identidade.'
-          : 'Sem backup exportado. Exporte para não perder esta identidade.'}
+          ? 'You have a backup of this identity.'
+          : 'No exported backup. Export it so you don\'t lose this identity.'}
       </p>
       <button type="button" class="primary" disabled={busy} onclick={enter}>
-        {busy ? 'Aguarde…' : 'Entrar'}
+        {busy ? 'Please wait…' : 'Sign in'}
       </button>
-      <button type="button" class="ghost" onclick={saveBackup}>Exportar backup</button>
+      <button type="button" class="ghost" onclick={saveBackup}>Export backup</button>
     {:else}
       <p class="sub">
-        {mode === 'create' ? 'Crie sua identidade neste dispositivo' : 'Importe um backup existente'}
+        {mode === 'create' ? 'Create your identity on this device' : 'Import an existing backup'}
       </p>
 
       {#if mode === 'create'}
         <form onsubmit={submitCreate}>
-          <label for="display">Nome de exibição</label>
+          <label for="display">Display name</label>
           <input
             id="display"
             type="text"
             autocomplete="nickname"
             bind:value={displayName}
-            placeholder="Seu nome"
+            placeholder="Your name"
             maxlength="40"
           />
-          <button type="submit" disabled={busy}>{busy ? 'Criando…' : 'Criar identidade'}</button>
+          <button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create identity'}</button>
           <button type="button" class="ghost" onclick={() => (mode = 'import')}>
-            Importar backup
+            Import backup
           </button>
         </form>
       {:else}
         <form onsubmit={submitImport}>
           <label for="backup">Backup</label>
-          <textarea id="backup" bind:value={backup} placeholder="Cole o conteúdo do backup"></textarea>
+          <textarea id="backup" bind:value={backup} placeholder="Paste the backup contents"></textarea>
           <label class="file">
-            <span>Carregar arquivo…</span>
+            <span>Load file…</span>
             <input type="file" accept=".json,.txt,.key,application/json" onchange={onBackupFile} />
           </label>
-          <label for="passphrase">Passphrase (opcional, local)</label>
+          <label for="passphrase">Passphrase (optional, local)</label>
           <input
             id="passphrase"
             type="password"
             autocomplete="off"
             bind:value={passphrase}
-            placeholder="só se o backup tiver"
+            placeholder="only if the backup has one"
           />
-          <button type="submit" disabled={busy}>{busy ? 'Importando…' : 'Importar'}</button>
-          <button type="button" class="ghost" onclick={() => (mode = 'create')}>Criar nova</button>
+          <button type="submit" disabled={busy}>{busy ? 'Importing…' : 'Import'}</button>
+          <button type="button" class="ghost" onclick={() => (mode = 'create')}>Create new</button>
         </form>
       {/if}
     {/if}
@@ -148,7 +148,7 @@
       <p class="error">{error}</p>
     {/if}
 
-    <p class="privacy">Chaves ficam só neste dispositivo. Mensagens desaparecem em 24h.</p>
+    <p class="privacy">Keys stay only on this device. Messages disappear after 24h.</p>
   </div>
 </div>
 

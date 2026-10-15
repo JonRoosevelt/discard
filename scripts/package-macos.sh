@@ -9,21 +9,21 @@ VERSION="0.1.0"
 APP_DIR="dist/macos/${APP_NAME}.app"
 DMG="dist/${APP_NAME}-${VERSION}-macos.dmg"
 
-die() { echo "erro: $*" >&2; exit 1; }
+die() { echo "error: $*" >&2; exit 1; }
 
 if [ "$(uname -s)" != "Darwin" ]; then
-  die "scripts/package-macos.sh só roda no macOS (uname -s = $(uname -s)); use uma máquina macOS ou o job macos do CI"
+  die "scripts/package-macos.sh only runs on macOS (uname -s = $(uname -s)); use a macOS machine or the CI macos job"
 fi
 
-[ -f assets/icon.png ] || die "assets/icon.png não encontrado"
+[ -f assets/icon.png ] || die "assets/icon.png not found"
 
 if [ ! -f web/dist/index.html ]; then
-  echo "web/dist ausente, construindo a UI (npm ci && npm run build)..."
+  echo "web/dist missing, building the UI (npm ci && npm run build)..."
   ( cd web && npm ci && npm run build )
 fi
 
 if [ ! -f target/release/discard ] && [ ! -f target/release/discard-server ]; then
-  echo "binário release ausente, compilando (cargo build --release --features embed-ui)..."
+  echo "release binary missing, building (cargo build --release --features embed-ui)..."
   cargo build --release --features embed-ui
 fi
 
@@ -32,7 +32,7 @@ if [ -f target/release/discard ]; then
 elif [ -f target/release/discard-server ]; then
   BIN_SRC="target/release/discard-server"
 else
-  die "binário release não encontrado; rode: cargo build --release --features embed-ui"
+  die "release binary not found; run: cargo build --release --features embed-ui"
 fi
 
 rm -rf dist/macos
@@ -75,9 +75,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Discard usa o microfone para voz nas chamadas dos canais.</string>
+  <string>Discard uses the microphone for voice in channel calls.</string>
   <key>NSCameraUsageDescription</key>
-  <string>Discard usa a câmera para vídeo nas chamadas dos canais.</string>
+  <string>Discard uses the camera for video in channel calls.</string>
 </dict>
 </plist>
 PLIST
@@ -99,17 +99,17 @@ rm -rf "$(dirname "$ICONSET")"
 
 if command -v codesign >/dev/null 2>&1; then
   if codesign --force --deep --sign - "$APP_DIR" >/dev/null 2>&1; then
-    echo "assinatura ad-hoc aplicada"
+    echo "ad-hoc signature applied"
   else
-    echo "aviso: assinatura ad-hoc falhou; abra com right-click > Open"
+    echo "warning: ad-hoc signing failed; open with right-click > Open"
   fi
 fi
 
-echo "aviso: a assinatura ad-hoc NÃO serve para distribuição; para publicar use um certificado Developer ID"
-echo "       (codesign --sign 'Developer ID Application: ...') seguido de notarização (xcrun notarytool) e staple."
+echo "warning: ad-hoc signing is NOT for distribution; to publish use a Developer ID certificate"
+echo "         (codesign --sign 'Developer ID Application: ...') then notarization (xcrun notarytool) and staple."
 
 mkdir -p dist
 hdiutil create -volname "$APP_NAME" -srcfolder "$APP_DIR" -ov -format UDZO "$DMG"
 
-echo "pronto: $APP_DIR"
-echo "pronto: $DMG"
+echo "done: $APP_DIR"
+echo "done: $DMG"
