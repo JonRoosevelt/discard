@@ -38,11 +38,14 @@ impl IrohNet {
     pub async fn start(
         secret_key: SecretKey,
         offline: bool,
+        no_relay: bool,
         blobs_dir: &Path,
     ) -> anyhow::Result<Arc<Self>> {
         let lookup = MemoryLookup::new();
         let builder = if offline {
             Endpoint::builder(presets::Minimal)
+        } else if no_relay {
+            Endpoint::builder(presets::N0DisableRelay)
         } else {
             Endpoint::builder(presets::N0)
         };

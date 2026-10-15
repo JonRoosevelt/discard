@@ -42,6 +42,7 @@ async fn main() -> anyhow::Result<()> {
     let net = IrohNet::start(
         identity.secret_key(),
         config.offline,
+        config.no_relay,
         &config.blobs_dir(),
     )
     .await?;

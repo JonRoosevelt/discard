@@ -33,6 +33,7 @@ impl AppState {
         let net = IrohNet::start(
             self.identity.secret_key(),
             self.config.offline,
+            self.config.no_relay,
             &self.config.blobs_dir(),
         )
         .await?;

@@ -5,6 +5,7 @@ pub struct Config {
     pub addr: String,
     pub data_dir: PathBuf,
     pub offline: bool,
+    pub no_relay: bool,
     pub no_open: bool,
     pub token_override: Option<String>,
 }
@@ -22,12 +23,14 @@ impl Config {
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("data"));
         let offline = env_bool("DISCARD_OFFLINE");
+        let no_relay = env_bool("DISCARD_NO_RELAY");
         let no_open = env_bool("DISCARD_NO_OPEN");
         let token_override = std::env::var("DISCARD_TOKEN").ok().filter(|v| !v.is_empty());
         Config {
             addr,
             data_dir,
             offline,
+            no_relay,
             no_open,
             token_override,
         }
