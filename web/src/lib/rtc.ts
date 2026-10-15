@@ -1,7 +1,26 @@
 import { ws } from './ws'
 import type { Id, ServerEvent, SignalData, VoiceMember } from './protocol'
 
-export const ICE_SERVERS: RTCIceServer[] = []
+function buildIceServers(): RTCIceServer[] {
+  const rawJson = import.meta.env.VITE_ICE_SERVERS
+  if (rawJson) {
+    try {
+      return JSON.parse(rawJson) as RTCIceServer[]
+    } catch {
+      void 0
+    }
+  }
+  const rawList: string =
+    (import.meta.env.VITE_STUN as string | undefined) ??
+    'stun:stun.cloudflare.com:3478,stun:stun.l.google.com:19302'
+  return rawList
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map((urls) => ({ urls }))
+}
+
+export const ICE_SERVERS: RTCIceServer[] = buildIceServers()
 
 export interface PeerState {
   id: Id
