@@ -241,16 +241,17 @@ export class VoiceSession {
         break
       case 'voice_joined':
         if (ev.presence.channel_id === this.channelId) {
-          for (const member of ev.presence.members) this.setMember(member)
+          for (const member of ev.presence.members) {
+            this.setMember(member)
+            this.ensureOffer(member.user.id)
+          }
         }
         break
       case 'voice_presence':
         if (ev.presence.channel_id === this.channelId) {
           for (const member of ev.presence.members) {
             this.setMember(member)
-            if (member.user.id !== this.selfId && !this.pcs.has(member.user.id)) {
-              void this.startOffer(member.user.id)
-            }
+            this.ensureOffer(member.user.id)
           }
         }
         break
@@ -260,6 +261,11 @@ export class VoiceSession {
       default:
         break
     }
+  }
+
+  private ensureOffer(id: Id): void {
+    if (id === this.selfId || this.pcs.has(id)) return
+    if (this.selfId < id) void this.startOffer(id)
   }
 
   private setMember(member: VoiceMember): void {
