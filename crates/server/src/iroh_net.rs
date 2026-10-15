@@ -89,6 +89,10 @@ impl IrohNet {
         EndpointTicket::new(self.endpoint.addr()).to_string()
     }
 
+    pub fn endpoint_id(&self) -> EndpointId {
+        self.endpoint.id()
+    }
+
     #[allow(dead_code)]
     pub fn add_peer_addr(&self, addr: EndpointAddr) {
         self.lookup.add_endpoint_info(addr);

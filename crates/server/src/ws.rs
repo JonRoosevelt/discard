@@ -12,9 +12,22 @@ use tokio::sync::mpsc;
 
 use crate::error::AppError;
 use crate::hub::ConnId;
-use crate::iroh_net::{Wire, OP_TIMEOUT};
+use crate::iroh_net::{IrohNet, Wire, OP_TIMEOUT};
 use crate::state::AppState;
 use crate::voice::Envelope;
+
+async fn owner_bootstrap(state: &AppState, net: &IrohNet, workspace_id: &Id) -> Vec<iroh::EndpointId> {
+    let Some(record) = state.store.record(workspace_id).await else {
+        return Vec::new();
+    };
+    let Some(ticket) = record.owner_endpoint_ticket else {
+        return Vec::new();
+    };
+    match net.add_peer_ticket(&ticket) {
+        Ok(id) if id != net.endpoint_id() => vec![id],
+        _ => Vec::new(),
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct TokenQuery {
@@ -403,18 +416,7 @@ pub async fn ensure_subscription(state: &AppState, channel_id: &Id) {
         tracing::debug!("channel {} is not part of a known workspace", channel_id);
         return;
     };
-    if let Some(record) = state.store.record(&workspace_id).await {
-        if let Some(ticket) = &record.owner_endpoint_ticket {
-            let _ = net.add_peer_ticket(ticket);
-        }
-    }
-    let bootstrap: Vec<_> = state
-        .store
-        .peers(&workspace_id)
-        .await
-        .iter()
-        .filter_map(|peer| net.parse_peer(peer))
-        .collect();
+    let bootstrap = owner_bootstrap(state, &net, &workspace_id).await;
     match net.subscribe_channel(channel_id, &secret, bootstrap).await {
         Ok((_sender, receiver)) => {
             spawn_receiver(state.clone(), channel_id.clone(), workspace_id, receiver)
@@ -431,16 +433,7 @@ pub async fn ensure_workspace_subscription(state: &AppState, workspace_id: &Id) 
     let Some(record) = state.store.record(workspace_id).await else {
         return;
     };
-    if let Some(ticket) = &record.owner_endpoint_ticket {
-        let _ = net.add_peer_ticket(ticket);
-    }
-    let bootstrap: Vec<_> = state
-        .store
-        .peers(workspace_id)
-        .await
-        .iter()
-        .filter_map(|peer| net.parse_peer(peer))
-        .collect();
+    let bootstrap = owner_bootstrap(state, &net, workspace_id).await;
     match net
         .subscribe_workspace(workspace_id, &record.secret, bootstrap)
         .await
