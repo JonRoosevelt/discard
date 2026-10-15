@@ -28,6 +28,7 @@ export interface PeerState {
   video: boolean
   screen: boolean
   muted: boolean
+  conn: string
 }
 
 export interface VoiceSessionOptions {
@@ -280,7 +281,7 @@ export class VoiceSession {
   private peerState(id: Id): PeerState {
     let state = this.peers.get(id)
     if (!state) {
-      state = { id, stream: null, video: false, screen: false, muted: false }
+      state = { id, stream: null, video: false, screen: false, muted: false, conn: 'new' }
       this.peers.set(id, state)
     }
     return state
@@ -308,6 +309,10 @@ export class VoiceSession {
         sdp_mid: candidate.sdpMid,
         sdp_mline_index: candidate.sdpMLineIndex,
       })
+    }
+    pc.onconnectionstatechange = () => {
+      this.peerState(id).conn = pc.connectionState
+      this.notify()
     }
     pc.ontrack = (e) => {
       if (!stream.getTracks().some((t) => t.id === e.track.id)) stream.addTrack(e.track)

@@ -9,6 +9,8 @@
     video?: boolean
     screen?: boolean
     deafened?: boolean
+    hasVideo?: boolean
+    conn?: string
   }
 
   let {
@@ -19,11 +21,13 @@
     video = false,
     screen = false,
     deafened = false,
+    hasVideo = false,
+    conn = '',
   }: Props = $props()
 
   let el = $state<HTMLVideoElement>()
 
-  let hasVideo = $derived(!!stream && stream.getVideoTracks().length > 0)
+  let status = $derived(local || !conn || conn === 'connected' ? '' : conn)
 
   $effect(() => {
     if (el && el.srcObject !== stream) el.srcObject = stream
@@ -39,6 +43,10 @@
 
   {#if !hasVideo}
     <span class="avatar" style="background: {avatarColor(name)}">{initials(name)}</span>
+  {/if}
+
+  {#if status}
+    <span class="conn">{status}</span>
   {/if}
 
   <div class="bar">
@@ -83,6 +91,17 @@
     color: #fff;
     font-weight: 600;
     font-size: 16px;
+  }
+
+  .conn {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--text-2);
+    font-size: 10px;
   }
 
   .bar {

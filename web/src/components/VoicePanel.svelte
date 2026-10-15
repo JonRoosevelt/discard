@@ -34,16 +34,27 @@
 
   let tiles = $derived.by(() => {
     void tick
-    return others.map((member) => ({
-      member,
-      stream: session?.peers.get(member.user.id)?.stream ?? null,
-    }))
+    return others.map((member) => {
+      const peer = session?.peers.get(member.user.id)
+      const stream = peer?.stream ?? null
+      return {
+        member,
+        stream,
+        hasVideo: !!stream && stream.getVideoTracks().length > 0,
+        conn: peer?.conn ?? '',
+      }
+    })
   })
 
   let localPreview = $derived.by(() => {
     void tick
     const active = session
     return active ? (active.screenStream ?? active.localStream) : null
+  })
+
+  let localHasVideo = $derived.by(() => {
+    void tick
+    return !!localPreview && localPreview.getVideoTracks().length > 0
   })
 
   let connected = $derived.by(() => {
@@ -185,6 +196,7 @@
         micMuted={!micOn}
         video={camOn}
         screen={screenOn}
+        hasVideo={localHasVideo}
       />
       {#each tiles as tile (tile.member.user.id)}
         <VideoTile
@@ -194,6 +206,8 @@
           video={tile.member.video}
           screen={tile.member.screen}
           deafened={deafened}
+          hasVideo={tile.hasVideo}
+          conn={tile.conn}
         />
       {/each}
     </div>
