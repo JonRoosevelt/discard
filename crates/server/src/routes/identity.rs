@@ -36,7 +36,7 @@ pub async fn backup(State(state): State<AppState>) -> AppResult<Response> {
             (header::CONTENT_TYPE, "text/plain; charset=utf-8"),
             (
                 header::CONTENT_DISPOSITION,
-                "attachment; filename=\"cadence-identity-backup.txt\"",
+                "attachment; filename=\"discard-identity-backup.txt\"",
             ),
         ],
         body,
@@ -53,7 +53,7 @@ pub async fn import(
         .import(&req.backup)
         .map_err(|e| AppError::BadRequest(e.to_string()))?;
     if state.identity.display_name().is_empty() {
-        let _ = state.identity.set_display_name("Cadence");
+        let _ = state.identity.set_display_name("Discard");
     }
     state
         .rebuild_net()

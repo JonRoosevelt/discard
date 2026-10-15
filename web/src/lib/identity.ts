@@ -36,7 +36,7 @@ export async function exportBackup(): Promise<void> {
   const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = objectUrl
-  a.download = 'cadence-identity.backup'
+  a.download = 'discard-identity.backup'
   document.body.appendChild(a)
   a.click()
   a.remove()

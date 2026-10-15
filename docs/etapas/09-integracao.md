@@ -7,7 +7,7 @@
 
 ## Smoke test E2E (dois nós)
 
-Provado no nó local (`CADENCE_OFFLINE=1`, portas e dirs distintos):
+Provado no nó local (`DISCARD_OFFLINE=1`, portas e dirs distintos):
 
 1. dois nós criam identidade;
 2. A cria workspace → B faz **join por ticket** e passa a listar o workspace;
@@ -39,12 +39,12 @@ No navegador via `http://127.0.0.1:8787/?k=<token>`:
 ```bash
 # nó local (abre a UI com o token)
 cargo run -p server
-# online (descoberta real): sem CADENCE_OFFLINE
-# offline/local: CADENCE_OFFLINE=1
+# online (descoberta real): sem DISCARD_OFFLINE
+# offline/local: DISCARD_OFFLINE=1
 ```
 
-Variáveis: `CADENCE_ADDR` (default `127.0.0.1:8787`), `CADENCE_DATA_DIR` (default `data`),
-`CADENCE_OFFLINE`.
+Variáveis: `DISCARD_ADDR` (default `127.0.0.1:8787`), `DISCARD_DATA_DIR` (default `data`),
+`DISCARD_OFFLINE`.
 
 Desenvolvimento da UI:
 
@@ -65,4 +65,4 @@ cd web && npm install && npm run dev   # 5173, proxy para o nó em 8787
 ## Decisão sobre "servidor"
 
 Não há servidor de aplicação. Só relay (fallback, cifrado, self-hostável) e address lookup. O binário
-`cadence-server` é o **nó local** que cada usuário roda — não é um servidor central.
+`discard-server` é o **nó local** que cada usuário roda — não é um servidor central.

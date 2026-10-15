@@ -1,4 +1,4 @@
-# Cadence
+# Discard
 
 Clone de Discord **minimalista, P2P e efêmero**.
 
@@ -16,7 +16,7 @@ Clone de Discord **minimalista, P2P e efêmero**.
 [ Navegador A ] --localhost--> [ Nó A ] <== iroh (gossip + blobs) ==> [ Nó B ] --localhost--> [ Navegador B ]
 ```
 
-- **Nó local** (`crates/server`, bin `cadence-server`): identidade (ed25519), endpoint/gossip/blobs do
+- **Nó local** (`crates/server`, bin `discard-server`): identidade (ed25519), endpoint/gossip/blobs do
   iroh, buffer local de 24h, e a API local (Axum) que serve a UI.
 - **UI** (`web/`, Svelte 5 + Vite): fala só com o nó local; mídia por WebRTC.
 - **Infra opcional** (não vê conteúdo): relay do iroh (fallback cifrado) e address lookup — ambos
@@ -32,7 +32,7 @@ cargo run -p server
 cd web && npm install && npm run dev
 ```
 
-Variáveis: `CADENCE_ADDR` (`127.0.0.1:8787`), `CADENCE_DATA_DIR` (`data`), `CADENCE_OFFLINE`
+Variáveis: `DISCARD_ADDR` (`127.0.0.1:8787`), `DISCARD_DATA_DIR` (`data`), `DISCARD_OFFLINE`
 (`1` = sem relay/DNS, para testes locais).
 
 ## Stack

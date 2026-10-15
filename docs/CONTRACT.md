@@ -1,4 +1,4 @@
-# Cadence — Interface Contract v3 (P2P, efêmero, local-first)
+# Discard — Interface Contract v3 (P2P, efêmero, local-first)
 
 > **v3.** Sem servidor central **e** sem armazenamento de mensagens: **mensagens expiram em 24h**.
 > Sem CRDT, sem banco de histórico. Cada usuário roda um **nó local** em Rust que fala **iroh**.

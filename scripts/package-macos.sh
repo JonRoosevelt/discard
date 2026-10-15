@@ -3,8 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-APP_NAME="Cadence"
-APP_ID="app.cadence.desktop"
+APP_NAME="Discard"
+APP_ID="app.discard.desktop"
 VERSION="0.1.0"
 APP_DIR="dist/macos/${APP_NAME}.app"
 DMG="dist/${APP_NAME}-${VERSION}-macos.dmg"
@@ -22,15 +22,15 @@ if [ ! -f web/dist/index.html ]; then
   ( cd web && npm ci && npm run build )
 fi
 
-if [ ! -f target/release/cadence ] && [ ! -f target/release/cadence-server ]; then
+if [ ! -f target/release/discard ] && [ ! -f target/release/discard-server ]; then
   echo "binário release ausente, compilando (cargo build --release --features embed-ui)..."
   cargo build --release --features embed-ui
 fi
 
-if [ -f target/release/cadence ]; then
-  BIN_SRC="target/release/cadence"
-elif [ -f target/release/cadence-server ]; then
-  BIN_SRC="target/release/cadence-server"
+if [ -f target/release/discard ]; then
+  BIN_SRC="target/release/discard"
+elif [ -f target/release/discard-server ]; then
+  BIN_SRC="target/release/discard-server"
 else
   die "binário release não encontrado; rode: cargo build --release --features embed-ui"
 fi
@@ -38,18 +38,18 @@ fi
 rm -rf dist/macos
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
-cp "$BIN_SRC" "$APP_DIR/Contents/MacOS/cadence-bin"
-chmod +x "$APP_DIR/Contents/MacOS/cadence-bin"
+cp "$BIN_SRC" "$APP_DIR/Contents/MacOS/discard-bin"
+chmod +x "$APP_DIR/Contents/MacOS/discard-bin"
 
-cat > "$APP_DIR/Contents/MacOS/Cadence" <<'LAUNCHER'
+cat > "$APP_DIR/Contents/MacOS/Discard" <<'LAUNCHER'
 #!/bin/bash
 set -euo pipefail
-export CADENCE_DATA_DIR="$HOME/Library/Application Support/Cadence"
-mkdir -p "$CADENCE_DATA_DIR"
+export DISCARD_DATA_DIR="$HOME/Library/Application Support/Discard"
+mkdir -p "$DISCARD_DATA_DIR"
 DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$DIR/cadence-bin" "$@"
+exec "$DIR/discard-bin" "$@"
 LAUNCHER
-chmod +x "$APP_DIR/Contents/MacOS/Cadence"
+chmod +x "$APP_DIR/Contents/MacOS/Discard"
 
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -75,9 +75,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Cadence usa o microfone para voz nas chamadas dos canais.</string>
+  <string>Discard usa o microfone para voz nas chamadas dos canais.</string>
   <key>NSCameraUsageDescription</key>
-  <string>Cadence usa a câmera para vídeo nas chamadas dos canais.</string>
+  <string>Discard usa a câmera para vídeo nas chamadas dos canais.</string>
 </dict>
 </plist>
 PLIST

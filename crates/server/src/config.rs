@@ -17,13 +17,13 @@ fn env_bool(name: &str) -> bool {
 
 impl Config {
     pub fn from_env() -> Self {
-        let addr = std::env::var("CADENCE_ADDR").unwrap_or_else(|_| "127.0.0.1:8787".to_string());
-        let data_dir = std::env::var("CADENCE_DATA_DIR")
+        let addr = std::env::var("DISCARD_ADDR").unwrap_or_else(|_| "127.0.0.1:8787".to_string());
+        let data_dir = std::env::var("DISCARD_DATA_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("data"));
-        let offline = env_bool("CADENCE_OFFLINE");
-        let no_open = env_bool("CADENCE_NO_OPEN");
-        let token_override = std::env::var("CADENCE_TOKEN").ok().filter(|v| !v.is_empty());
+        let offline = env_bool("DISCARD_OFFLINE");
+        let no_open = env_bool("DISCARD_NO_OPEN");
+        let token_override = std::env::var("DISCARD_TOKEN").ok().filter(|v| !v.is_empty());
         Config {
             addr,
             data_dir,
@@ -43,7 +43,7 @@ impl Config {
 
     #[allow(dead_code)]
     pub fn web_dist(&self) -> PathBuf {
-        if let Ok(dir) = std::env::var("CADENCE_WEB_DIST") {
+        if let Ok(dir) = std::env::var("DISCARD_WEB_DIST") {
             return PathBuf::from(dir);
         }
         let local = PathBuf::from("web/dist");

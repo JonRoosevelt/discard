@@ -9,7 +9,7 @@ import type {
   Workspace,
 } from './protocol'
 
-const TOKEN_KEY = 'cadence_session'
+const TOKEN_KEY = 'discard_session'
 
 function fromQuery(key: string): string | null {
   if (typeof location === 'undefined') return null

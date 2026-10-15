@@ -1,4 +1,4 @@
-# Cadence — Privacidade e modelo de ameaça
+# Discard — Privacidade e modelo de ameaça
 
 Requisito de primeira classe: **não existe servidor central guardando mensagens**. Todo conteúdo
 vive nos dispositivos dos participantes e é replicado **peer-to-peer**. Este documento define o que

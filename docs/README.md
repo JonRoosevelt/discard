@@ -1,4 +1,4 @@
-# Cadence — Documentação
+# Discard — Documentação
 
 Clone minimalista de Discord: **workspaces**, canais de **texto e voz**, **upload de arquivos**,
 **áudio/vídeo em tempo real**, **efeitos sonoros** e **privacidade forte** — tudo **P2P**

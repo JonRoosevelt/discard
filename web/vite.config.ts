@@ -1,7 +1,7 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vite'
 
-const BACKEND = process.env.CADENCE_BACKEND ?? 'http://127.0.0.1:8787'
+const BACKEND = process.env.DISCARD_BACKEND ?? 'http://127.0.0.1:8787'
 
 export default defineConfig({
   plugins: [svelte()],

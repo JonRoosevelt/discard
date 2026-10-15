@@ -12,4 +12,4 @@ echo "==> Build da UI (web/dist)"
 echo "==> Binário release com a UI embutida"
 cargo build --release --features embed-ui
 
-echo "OK -> target/release/cadence"
+echo "OK -> target/release/discard"

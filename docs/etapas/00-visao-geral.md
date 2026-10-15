@@ -54,7 +54,7 @@ Discard/
 ├── Cargo.toml                 # workspace Rust
 ├── crates/
 │   ├── shared/                # tipos do protocolo UI <-> nó (Id = String)
-│   ├── server/                # bin `cadence-server` = NÓ LOCAL (Axum + iroh)
+│   ├── server/                # bin `discard-server` = NÓ LOCAL (Axum + iroh)
 │   └── iroh-spike/            # spike descartável para validar a API do iroh
 ├── web/                       # UI Svelte 5 + Vite
 ├── docs/                      # documentação

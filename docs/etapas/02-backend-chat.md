@@ -14,7 +14,7 @@ Wave 2), com autenticação, REST de workspaces/canais/mensagens e loop de WebSo
 
 ## O que ficou pronto
 
-- **Config por env**: `CADENCE_ADDR`, `CADENCE_DB`, `CADENCE_UPLOADS`, `CADENCE_JWT_SECRET`.
+- **Config por env**: `DISCARD_ADDR`, `DISCARD_DB`, `DISCARD_UPLOADS`, `DISCARD_JWT_SECRET`.
 - **Erros**: `AppError` → JSON `{"error": "..."}` com status HTTP adequado.
 - **DB**: pool SQLite com `foreign_keys`, `WAL`, `create_if_missing`; migrações automáticas no boot.
 - **Auth**: argon2 para hash, JWT HS256 (30 dias), extractor `AuthUser` (bearer) via

@@ -67,7 +67,7 @@
 
 <aside class="sidebar">
   <header class="ws-header">
-    <h1>{workspace?.name ?? 'Cadence'}</h1>
+    <h1>{workspace?.name ?? 'Discard'}</h1>
     {#if workspace}
       <button class="icon" aria-label="Convite do workspace" title="Convite" onclick={() => (invite = true)}>
         ✚

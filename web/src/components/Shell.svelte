@@ -19,7 +19,7 @@
 {#if !hasSession()}
   <div class="gate">
     <div class="gate-card">
-      <h1>Cadence</h1>
+      <h1>Discard</h1>
       <p>Abra esta interface pelo nó local.</p>
       <p class="hint">
         O nó inicia a UI em <code>http://127.0.0.1:&lt;porta&gt;/?k=&lt;token&gt;</code>.

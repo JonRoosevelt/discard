@@ -22,7 +22,7 @@ entre subagents. Tudo aqui foi feito pelo tech lead.
    `VoiceMember`, `VoicePresence`, requests de REST, `SignalData` (offer/answer/ice),
    `ClientEvent` e `ServerEvent` (taggeados com `op`). Ambos os lados derivam deste arquivo.
 
-3. **`crates/server`** — bin `cadence-server`. Dependências adicionadas com `cargo add`
+3. **`crates/server`** — bin `discard-server`. Dependências adicionadas com `cargo add`
    (versões resolvidas pelo crates.io, à época): `axum 0.8`, `tower-http 0.7`, `sqlx 0.9`,
    `argon2 0.6`, `jsonwebtoken 11`, `dashmap 6`, `futures-util`, `mime_guess`, `rand 0.10`.
 
@@ -33,7 +33,7 @@ entre subagents. Tudo aqui foi feito pelo tech lead.
 
 5. **Frontend** — scaffold `npm create vite@latest web -- --template svelte-ts`
    (Svelte 5.57, Vite 8, TS 6). `vite.config.ts` com proxy de `/api`, `/files` e `/ws` (incl. `ws: true`)
-   para `127.0.0.1:8787`, parametrizável por `CADENCE_BACKEND`.
+   para `127.0.0.1:8787`, parametrizável por `DISCARD_BACKEND`.
 
 6. **`docs/CONTRACT.md`** — a fonte de verdade: tabela REST, semântica do WebSocket, algoritmo do mesh
    WebRTC, estrutura de arquivos com **dono por agente** e contratos do frontend (`api.ts`, `ws.ts`,

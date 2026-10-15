@@ -79,7 +79,7 @@
 
 <div class="identity">
   <div class="card">
-    <h1>Cadence</h1>
+    <h1>Discard</h1>
 
     {#if identity}
       <p class="sub">Identidade local</p>

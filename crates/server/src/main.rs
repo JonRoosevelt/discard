@@ -99,9 +99,9 @@ async fn main() -> anyhow::Result<()> {
     let app = routes::router(state);
     let listener = tokio::net::TcpListener::bind(&config.addr).await?;
     let url = format!("http://{}/?k={}", config.display_host(), session_token);
-    tracing::info!("cadence (nó local) ouvindo em http://{}", config.addr);
+    tracing::info!("discard (nó local) ouvindo em http://{}", config.addr);
     tracing::info!("endpoint id = {}", identity.public_id());
-    println!("\n  Cadence pronto: {url}\n");
+    println!("\n  Discard pronto: {url}\n");
 
     if !config.no_open {
         open_browser(&url);

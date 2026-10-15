@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
         .context("B joined timeout")??;
     println!("[gossip] A joined; B joined");
 
-    let payload = b"cadence-ping-from-A".to_vec();
+    let payload = b"discard-ping-from-A".to_vec();
     tx_a.broadcast(payload.clone().into()).await?;
     println!("[gossip] A broadcast {} bytes", payload.len());
 
@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
     assert_eq!(received.as_ref(), payload.as_slice());
     println!("[gossip] OK: bytes received from A are equal");
 
-    let blob = b"cadence blob payload for integrity check".to_vec();
+    let blob = b"discard blob payload for integrity check".to_vec();
     let tag = store_a.blobs().add_bytes(blob.clone()).await?;
     println!("[blob] A added blob hash={} size={}", tag.hash, blob.len());
 

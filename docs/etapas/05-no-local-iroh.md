@@ -25,10 +25,10 @@ Removidos: `db.rs`, `models.rs`, `auth.rs` (antigo), `upload.rs`, `migrations/` 
   GC a cada 5 min remove mensagens e blobs expirados.
 - **Mensagem:** enviada → broadcast por gossip + buffer + push para a UI; recebida → dedupe, buffer,
   download dos blobs anexados, push para a UI.
-- **Descoberta:** `presets::N0` (internet) ou `presets::Minimal` (`CADENCE_OFFLINE=1`), sempre com
+- **Descoberta:** `presets::N0` (internet) ou `presets::Minimal` (`DISCARD_OFFLINE=1`), sempre com
   `MemoryLookup` alimentado pelos endereços dos tickets.
 
-## Verificação (dois nós, `CADENCE_OFFLINE=1`)
+## Verificação (dois nós, `DISCARD_OFFLINE=1`)
 
 - A cria workspace → **B faz join pelo ticket e passa a listar o workspace** (descoberta por ticket).
 - A e B assinam `#geral`; A envia → **B recebe por gossip** e o `GET .../messages` de B traz a mensagem.
