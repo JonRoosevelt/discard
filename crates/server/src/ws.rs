@@ -403,6 +403,11 @@ pub async fn ensure_subscription(state: &AppState, channel_id: &Id) {
         tracing::debug!("channel {} is not part of a known workspace", channel_id);
         return;
     };
+    if let Some(record) = state.store.record(&workspace_id).await {
+        if let Some(ticket) = &record.owner_endpoint_ticket {
+            let _ = net.add_peer_ticket(ticket);
+        }
+    }
     let bootstrap: Vec<_> = state
         .store
         .peers(&workspace_id)
@@ -426,6 +431,9 @@ pub async fn ensure_workspace_subscription(state: &AppState, workspace_id: &Id) 
     let Some(record) = state.store.record(workspace_id).await else {
         return;
     };
+    if let Some(ticket) = &record.owner_endpoint_ticket {
+        let _ = net.add_peer_ticket(ticket);
+    }
     let bootstrap: Vec<_> = state
         .store
         .peers(workspace_id)
