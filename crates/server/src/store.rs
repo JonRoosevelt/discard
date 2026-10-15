@@ -160,6 +160,7 @@ impl Store {
         None
     }
 
+    #[allow(dead_code)]
     pub async fn peers(&self, workspace_id: &Id) -> Vec<String> {
         let db = self.db.lock().await;
         db.workspaces

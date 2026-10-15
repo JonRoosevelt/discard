@@ -6,7 +6,7 @@ use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use iroh_gossip::api::{Event, GossipReceiver};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use shared::{ChannelKind, ClientEvent, Id, Message, ServerEvent, UserPublic, VoiceMember};
 use tokio::sync::mpsc;
 
@@ -32,6 +32,14 @@ async fn owner_bootstrap(state: &AppState, net: &IrohNet, workspace_id: &Id) -> 
 #[derive(Debug, Deserialize)]
 pub struct TokenQuery {
     pub token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "f", rename_all = "snake_case")]
+enum Frame {
+    Msg { id: String, message: Message },
+    Env { id: String, envelope: Envelope },
+    Ack { id: String },
 }
 
 pub async fn handler(
@@ -327,13 +335,12 @@ pub async fn broadcast_envelope(state: &AppState, channel_id: &Id, envelope: Env
     if !net.has_workspace(&workspace_id) {
         return;
     }
-    match serde_json::to_vec(&envelope) {
-        Ok(bytes) => {
-            if let Err(e) = net.broadcast_workspace(&workspace_id, bytes).await {
-                tracing::debug!("voice gossip broadcast failed: {e}");
-            }
-        }
-        Err(e) => tracing::debug!("voice envelope encode failed: {e}"),
+    let id = hex::encode(rand::random::<[u8; 8]>());
+    if let Ok(bytes) = serde_json::to_vec(&Frame::Env {
+        id: id.clone(),
+        envelope,
+    }) {
+        net.broadcast_reliable(&workspace_id, id, bytes).await;
     }
 }
 
@@ -401,13 +408,13 @@ pub async fn publish(state: &AppState, message: Message) {
     };
     let workspace_id = channel.workspace_id;
     ensure_workspace_subscription(state, &workspace_id).await;
-    let net = state.net().await;
-    if let Ok(bytes) = serde_json::to_vec(&Wire::Message {
+    let id = message.id.clone();
+    if let Ok(bytes) = serde_json::to_vec(&Frame::Msg {
+        id: id.clone(),
         message: message.clone(),
     }) {
-        if let Err(e) = net.broadcast_workspace(&workspace_id, bytes).await {
-            tracing::debug!("gossip broadcast failed: {e}");
-        }
+        let net = state.net().await;
+        net.broadcast_reliable(&workspace_id, id, bytes).await;
     }
     state.hub.broadcast_message(&message);
 }
@@ -512,13 +519,38 @@ async fn handle_payload(state: &AppState, channel_id: &Id, workspace_id: &Id, by
 }
 
 async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Vec<u8>) {
-    if let Ok(envelope) = serde_json::from_slice::<Envelope>(&bytes) {
-        handle_voice(state, workspace_id, envelope).await;
-        return;
+    let frame = match serde_json::from_slice::<Frame>(&bytes) {
+        Ok(frame) => frame,
+        Err(_) => {
+            if let Ok(envelope) = serde_json::from_slice::<Envelope>(&bytes) {
+                handle_voice(state, workspace_id, envelope).await;
+            }
+            return;
+        }
+    };
+    let net = state.net().await;
+    match frame {
+        Frame::Ack { id } => net.ack(&id),
+        Frame::Msg { id, message } => {
+            send_ack(state, workspace_id, &id).await;
+            if net.mark_seen(&id) {
+                let channel_id = message.channel_id.clone();
+                handle_message(state, &channel_id, workspace_id, message).await;
+            }
+        }
+        Frame::Env { id, envelope } => {
+            send_ack(state, workspace_id, &id).await;
+            if net.mark_seen(&id) {
+                handle_voice(state, workspace_id, envelope).await;
+            }
+        }
     }
-    if let Ok(Wire::Message { message }) = serde_json::from_slice::<Wire>(&bytes) {
-        let channel_id = message.channel_id.clone();
-        handle_message(state, &channel_id, workspace_id, message).await;
+}
+
+async fn send_ack(state: &AppState, workspace_id: &Id, id: &str) {
+    let net = state.net().await;
+    if let Ok(bytes) = serde_json::to_vec(&Frame::Ack { id: id.to_string() }) {
+        let _ = net.broadcast_workspace(workspace_id, bytes).await;
     }
 }
 

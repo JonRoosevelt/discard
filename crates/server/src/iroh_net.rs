@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use dashmap::DashMap;
@@ -32,6 +32,15 @@ pub struct IrohNet {
     router: Router,
     subscriptions: DashMap<Id, GossipSender>,
     workspace_subscriptions: DashMap<Id, GossipSender>,
+    pending: DashMap<String, Pending>,
+    seen: DashMap<String, Instant>,
+}
+
+struct Pending {
+    bytes: Vec<u8>,
+    workspace_id: Id,
+    attempts: u32,
+    last: Instant,
 }
 
 impl IrohNet {
@@ -74,7 +83,7 @@ impl IrohNet {
             .accept(iroh_blobs::ALPN, BlobsProtocol::new(&store, None))
             .spawn();
 
-        Ok(Arc::new(Self {
+        let net = Arc::new(Self {
             endpoint,
             gossip,
             store,
@@ -82,7 +91,11 @@ impl IrohNet {
             router,
             subscriptions: DashMap::new(),
             workspace_subscriptions: DashMap::new(),
-        }))
+            pending: DashMap::new(),
+            seen: DashMap::new(),
+        });
+        tokio::spawn(net.clone().retry_loop());
+        Ok(net)
     }
 
     pub fn endpoint_ticket(&self) -> String {
@@ -148,6 +161,7 @@ impl IrohNet {
         Ok(parts)
     }
 
+    #[allow(dead_code)]
     pub async fn broadcast_channel(&self, channel_id: &Id, bytes: Vec<u8>) -> anyhow::Result<()> {
         let sender = self
             .channel_sender(channel_id)
@@ -198,6 +212,67 @@ impl IrohNet {
             .context("gossip broadcast timeout")?
             .context("gossip broadcast failed")?;
         Ok(())
+    }
+
+    pub async fn broadcast_reliable(&self, workspace_id: &Id, id: String, bytes: Vec<u8>) {
+        self.pending.insert(
+            id,
+            Pending {
+                bytes: bytes.clone(),
+                workspace_id: workspace_id.clone(),
+                attempts: 0,
+                last: Instant::now(),
+            },
+        );
+        if let Err(e) = self.broadcast_workspace(workspace_id, bytes).await {
+            tracing::debug!("reliable broadcast failed: {e}");
+        }
+    }
+
+    pub fn ack(&self, id: &str) {
+        self.pending.remove(id);
+    }
+
+    pub fn mark_seen(&self, id: &str) -> bool {
+        if self.seen.contains_key(id) {
+            return false;
+        }
+        self.seen.insert(id.to_string(), Instant::now());
+        true
+    }
+
+    async fn retry_loop(self: Arc<Self>) {
+        let mut ticker = tokio::time::interval(Duration::from_secs(2));
+        loop {
+            ticker.tick().await;
+            let now = Instant::now();
+            let due: Vec<(String, Vec<u8>, Id, u32)> = self
+                .pending
+                .iter()
+                .filter(|e| now.duration_since(e.last) >= Duration::from_secs(2))
+                .map(|e| {
+                    (
+                        e.key().clone(),
+                        e.bytes.clone(),
+                        e.workspace_id.clone(),
+                        e.attempts,
+                    )
+                })
+                .collect();
+            for (id, bytes, workspace_id, attempts) in due {
+                if attempts >= 8 {
+                    self.pending.remove(&id);
+                    continue;
+                }
+                let _ = self.broadcast_workspace(&workspace_id, bytes).await;
+                if let Some(mut p) = self.pending.get_mut(&id) {
+                    p.attempts += 1;
+                    p.last = now;
+                }
+            }
+            self.seen
+                .retain(|_, t| now.duration_since(*t) < Duration::from_secs(120));
+        }
     }
 
     pub async fn add_blob(&self, bytes: Vec<u8>) -> anyhow::Result<(String, Vec<u8>)> {
