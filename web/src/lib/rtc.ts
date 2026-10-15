@@ -44,6 +44,7 @@ interface Peer {
   videoSender: RTCRtpSender | null
   polite: boolean
   makingOffer: boolean
+  ignoreOffer: boolean
   pendingIce: RTCIceCandidateInit[]
 }
 
@@ -298,6 +299,7 @@ export class VoiceSession {
       videoSender: null,
       polite: this.selfId > id,
       makingOffer: false,
+      ignoreOffer: false,
       pendingIce: [],
     }
     pc.onicecandidate = (e) => {
@@ -313,20 +315,17 @@ export class VoiceSession {
     pc.onconnectionstatechange = () => {
       this.peerState(id).conn = pc.connectionState
       console.log('[rtc] pc', id.slice(0, 8), '->', pc.connectionState, 'ice:', pc.iceConnectionState)
+      if (pc.connectionState === 'failed') {
+        this.drop(id)
+        return
+      }
+      this.updateConnected()
       this.notify()
     }
     pc.ontrack = (e) => {
       console.log('[rtc] ontrack', id.slice(0, 8), e.track.kind)
       if (!stream.getTracks().some((t) => t.id === e.track.id)) stream.addTrack(e.track)
       this.peerState(id).stream = stream
-      this.notify()
-    }
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') {
-        this.drop(id)
-        return
-      }
-      this.updateConnected()
       this.notify()
     }
     this.peerState(id).stream = stream
@@ -353,8 +352,6 @@ export class VoiceSession {
       this.sendSignal(peerId, { kind: 'offer', sdp: offer.sdp ?? '' })
     } catch (e) {
       console.error('[rtc] startOffer error', e)
-      this.error = `Falha ao iniciar a conexão: ${String(e)}`
-      this.notify()
     } finally {
       peer.makingOffer = false
     }
@@ -368,53 +365,50 @@ export class VoiceSession {
       peer = this.createPeer(from)
       this.pcs.set(from, peer)
     }
+    const pc = peer.pc
     if (data.kind === 'ice') {
       const init: RTCIceCandidateInit = {
         candidate: data.candidate,
         sdpMid: data.sdp_mid ?? undefined,
         sdpMLineIndex: data.sdp_mline_index ?? undefined,
       }
-      if (peer.pc.remoteDescription) {
-        try {
-          await peer.pc.addIceCandidate(init)
-        } catch {
-          void 0
-        }
-      } else {
+      if (!pc.remoteDescription) {
         peer.pendingIce.push(init)
+        return
+      }
+      try {
+        await pc.addIceCandidate(init)
+      } catch (e) {
+        if (!peer.ignoreOffer) console.warn('[rtc] addIceCandidate', e)
       }
       return
     }
     if (data.kind === 'offer') {
-      const collision = peer.makingOffer || peer.pc.signalingState !== 'stable'
-      if (collision && !peer.polite) return
+      const collision = peer.makingOffer || pc.signalingState !== 'stable'
+      peer.ignoreOffer = !peer.polite && collision
+      if (peer.ignoreOffer) return
       try {
-        if (collision) await peer.pc.setLocalDescription({ type: 'rollback' })
-        await peer.pc.setRemoteDescription({ type: 'offer', sdp: data.sdp })
+        if (collision) await pc.setLocalDescription({ type: 'rollback' })
+        await pc.setRemoteDescription({ type: 'offer', sdp: data.sdp })
         this.setSenders(peer)
         if (this.micTrack && peer.audioSender) await peer.audioSender.replaceTrack(this.micTrack)
         const outgoing = this.screenTrack ?? this.videoTrack
         if (outgoing && peer.videoSender) await peer.videoSender.replaceTrack(outgoing)
-        const answer = await peer.pc.createAnswer()
-        await peer.pc.setLocalDescription(answer)
         await this.flushIce(peer)
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
         this.sendSignal(from, { kind: 'answer', sdp: answer.sdp ?? '' })
       } catch (e) {
         console.error('[rtc] answer error', e)
-        this.error = `Falha ao responder: ${String(e)}`
-        this.notify()
       }
       return
     }
-    if (peer.pc.signalingState === 'have-local-offer') {
-      try {
-        await peer.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp })
-        await this.flushIce(peer)
-      } catch (e) {
-        console.error('[rtc] setAnswer error', e)
-        this.error = `Falha no answer: ${String(e)}`
-        this.notify()
-      }
+    if (pc.signalingState !== 'have-local-offer') return
+    try {
+      await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp })
+      await this.flushIce(peer)
+    } catch (e) {
+      console.error('[rtc] setAnswer error', e)
     }
   }
 
