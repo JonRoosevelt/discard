@@ -6,8 +6,8 @@ Clone minimalista de Discord: **workspaces**, canais de **texto e voz**, **uploa
 
 | Documento | Conteúdo |
 |---|---|
-| [CONTRACT.md](./CONTRACT.md) | Fonte de verdade das interfaces (REST local, WS, tipos, donos de arquivo) |
-| [PRIVACY.md](./PRIVACY.md) | Modelo de ameaça, retenção (24h) e arquitetura de privacidade |
+| [CONTRACT.md](./CONTRACT.md) | Fonte de verdade das interfaces (REST local, WS, tipos, topics, donos de arquivo) |
+| [PRIVACY.md](./PRIVACY.md) | Modelo de ameaça, retenção (24h), cifra de conteúdo |
 | [DIST.md](./DIST.md) | Distribuição e instalação (binário único, Linux e macOS) |
 | [etapas/00-visao-geral.md](./etapas/00-visao-geral.md) | Visão geral, stack, decisões e roadmap |
 | [etapas/01-fundacao.md](./etapas/01-fundacao.md) | Workspace Rust, protocolo compartilhado, scaffolds |
@@ -20,5 +20,6 @@ Clone minimalista de Discord: **workspaces**, canais de **texto e voz**, **uploa
 | [etapas/08-soundboard.md](./etapas/08-soundboard.md) | Soundboard + efeitos builtin |
 | [etapas/09-integracao.md](./etapas/09-integracao.md) | Integração, E2E, como rodar, limitações |
 | [etapas/10-distribuicao.md](./etapas/10-distribuicao.md) | Binário único (UI embutida) e empacotamento |
+| [etapas/11-presenca-e-cifra.md](./etapas/11-presenca-e-cifra.md) | Presença por workspace + cifra de conteúdo |
 
-Ordem de leitura: **CONTRACT → PRIVACY → etapas/00 → 04 → … → 10**.
+Ordem de leitura: **CONTRACT → PRIVACY → etapas/00 → 04 → … → 11**.
