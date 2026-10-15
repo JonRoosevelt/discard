@@ -39,16 +39,22 @@ impl IrohNet {
         secret_key: SecretKey,
         offline: bool,
         no_relay: bool,
+        bind_addr: Option<std::net::SocketAddr>,
         blobs_dir: &Path,
     ) -> anyhow::Result<Arc<Self>> {
         let lookup = MemoryLookup::new();
-        let builder = if offline {
+        let mut builder = if offline {
             Endpoint::builder(presets::Minimal)
         } else if no_relay {
             Endpoint::builder(presets::N0DisableRelay)
         } else {
             Endpoint::builder(presets::N0)
         };
+        if let Some(addr) = bind_addr {
+            builder = builder
+                .bind_addr(addr)
+                .map_err(|e| anyhow::anyhow!("invalid iroh bind addr: {e}"))?;
+        }
         let endpoint = builder
             .address_lookup(lookup.clone())
             .secret_key(secret_key)

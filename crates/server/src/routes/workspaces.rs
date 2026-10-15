@@ -139,7 +139,18 @@ pub async fn ticket(
         .record(&id)
         .await
         .ok_or_else(|| AppError::NotFound("workspace not found".to_string()))?;
-    Ok(Json(serde_json::json!({ "ticket": record.ticket })))
+    let net = state.net().await;
+    let live = WorkspaceTicket {
+        v: TICKET_VERSION,
+        id: record.id.clone(),
+        name: record.name.clone(),
+        owner_id: record.owner_id.clone(),
+        owner_name: record.owner_name.clone(),
+        secret: record.secret.clone(),
+        channels: record.channels.clone(),
+        endpoint_ticket: net.endpoint_ticket(),
+    };
+    Ok(Json(serde_json::json!({ "ticket": live.encode() })))
 }
 
 pub async fn create_channel(

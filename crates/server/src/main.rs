@@ -43,6 +43,7 @@ async fn main() -> anyhow::Result<()> {
         identity.secret_key(),
         config.offline,
         config.no_relay,
+        config.iroh_bind,
         &config.blobs_dir(),
     )
     .await?;

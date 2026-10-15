@@ -7,6 +7,7 @@ pub struct Config {
     pub offline: bool,
     pub no_relay: bool,
     pub no_open: bool,
+    pub iroh_bind: Option<std::net::SocketAddr>,
     pub token_override: Option<String>,
 }
 
@@ -25,6 +26,9 @@ impl Config {
         let offline = env_bool("DISCARD_OFFLINE");
         let no_relay = env_bool("DISCARD_NO_RELAY");
         let no_open = env_bool("DISCARD_NO_OPEN");
+        let iroh_bind = std::env::var("DISCARD_IROH_BIND")
+            .ok()
+            .and_then(|v| v.parse().ok());
         let token_override = std::env::var("DISCARD_TOKEN").ok().filter(|v| !v.is_empty());
         Config {
             addr,
@@ -32,6 +36,7 @@ impl Config {
             offline,
             no_relay,
             no_open,
+            iroh_bind,
             token_override,
         }
     }
