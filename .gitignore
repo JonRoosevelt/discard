@@ -1,0 +1,12 @@
+/target
+**/node_modules
+**/dist
+/data
+/data-*
+/uploads
+*.log
+.env
+*.db
+*.db-shm
+*.db-wal
+.DS_Store
