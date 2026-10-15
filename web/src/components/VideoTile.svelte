@@ -34,7 +34,8 @@
   })
 
   $effect(() => {
-    if (el && hasVideo) void el.play().catch(() => {})
+    void hasVideo
+    if (el && stream) void el.play().catch(() => {})
   })
 </script>
 

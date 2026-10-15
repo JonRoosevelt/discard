@@ -90,16 +90,14 @@ export class VoiceSession {
       if (track) {
         track.enabled = !this.muted
         stream.addTrack(track)
+        for (const peer of this.pcs.values()) void peer.audioSender?.replaceTrack(track).catch(() => {})
       }
     } catch {
       this.error = 'Não foi possível acessar o microfone'
     }
     if (this.closed) return
     this.notify()
-    for (const id of peerIds) {
-      if (id === this.selfId) continue
-      void this.startOffer(id)
-    }
+    for (const id of peerIds) this.ensureOffer(id)
   }
 
   leave(): void {
@@ -418,14 +416,18 @@ export class VoiceSession {
     }
   }
 
+  // Transceivers created by setRemoteDescription default to recvonly, and ones we added before a
+  // rollback stay unnegotiated (mid null) forever; send on the negotiated ones or the answer is recvonly.
   private setSenders(peer: Peer): void {
-    if (peer.audioSender && peer.videoSender) return
-    let index = 0
+    peer.audioSender = null
+    peer.videoSender = null
     for (const transceiver of peer.pc.getTransceivers()) {
-      const kind = transceiver.receiver.track?.kind ?? transceiver.sender.track?.kind ?? (index === 0 ? 'audio' : 'video')
+      if (transceiver.mid == null || transceiver.currentDirection === 'stopped') continue
+      const kind = transceiver.receiver.track.kind
       if (kind === 'audio' && !peer.audioSender) peer.audioSender = transceiver.sender
       else if (kind === 'video' && !peer.videoSender) peer.videoSender = transceiver.sender
-      index += 1
+      else continue
+      transceiver.direction = 'sendrecv'
     }
   }
 

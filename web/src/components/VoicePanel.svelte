@@ -40,7 +40,8 @@
       return {
         member,
         stream,
-        hasVideo: !!stream && stream.getVideoTracks().length > 0,
+        hasVideo:
+          (member.video || member.screen) && !!stream && stream.getVideoTracks().length > 0,
         conn: peer?.conn ?? '',
       }
     })
