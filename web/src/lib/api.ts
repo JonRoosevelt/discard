@@ -40,7 +40,10 @@ function initialToken(): string | null {
     }
     return fromUrl
   }
-  return readStored()
+  const stored = readStored()
+  if (stored) return stored
+  if (import.meta.env.DEV) return 'dev'
+  return null
 }
 
 let current: string | null = initialToken()
