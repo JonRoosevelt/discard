@@ -31,6 +31,7 @@ pub struct IrohNet {
     lookup: MemoryLookup,
     router: Router,
     subscriptions: DashMap<Id, GossipSender>,
+    workspace_subscriptions: DashMap<Id, GossipSender>,
 }
 
 impl IrohNet {
@@ -71,6 +72,7 @@ impl IrohNet {
             lookup,
             router,
             subscriptions: DashMap::new(),
+            workspace_subscriptions: DashMap::new(),
         }))
     }
 
@@ -137,6 +139,47 @@ impl IrohNet {
         let sender = self
             .channel_sender(channel_id)
             .ok_or_else(|| anyhow::anyhow!("not subscribed to channel {channel_id}"))?;
+        tokio::time::timeout(OP_TIMEOUT, sender.broadcast(bytes.into()))
+            .await
+            .context("gossip broadcast timeout")?
+            .context("gossip broadcast failed")?;
+        Ok(())
+    }
+
+    pub fn has_workspace(&self, workspace_id: &Id) -> bool {
+        self.workspace_subscriptions.contains_key(workspace_id)
+    }
+
+    pub fn workspace_sender(&self, workspace_id: &Id) -> Option<GossipSender> {
+        self.workspace_subscriptions
+            .get(workspace_id)
+            .map(|s| s.clone())
+    }
+
+    pub async fn subscribe_workspace(
+        &self,
+        workspace_id: &Id,
+        secret_hex: &str,
+        bootstrap: Vec<EndpointId>,
+    ) -> anyhow::Result<(GossipSender, GossipReceiver)> {
+        if self.workspace_sender(workspace_id).is_some() {
+            anyhow::bail!("already subscribed to workspace {workspace_id}");
+        }
+        let topic = crate::ticket::workspace_topic_id(secret_hex)?;
+        let parts = self.subscribe(topic, bootstrap).await?;
+        self.workspace_subscriptions
+            .insert(workspace_id.clone(), parts.0.clone());
+        Ok(parts)
+    }
+
+    pub async fn broadcast_workspace(
+        &self,
+        workspace_id: &Id,
+        bytes: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let sender = self
+            .workspace_sender(workspace_id)
+            .ok_or_else(|| anyhow::anyhow!("not subscribed to workspace {workspace_id}"))?;
         tokio::time::timeout(OP_TIMEOUT, sender.broadcast(bytes.into()))
             .await
             .context("gossip broadcast timeout")?

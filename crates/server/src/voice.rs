@@ -45,6 +45,20 @@ pub enum Envelope {
     },
 }
 
+impl Envelope {
+    pub fn channel_id(&self) -> &Id {
+        match self {
+            Envelope::PresenceJoin { channel_id, .. }
+            | Envelope::PresenceUpdate { channel_id, .. }
+            | Envelope::PresenceLeave { channel_id, .. }
+            | Envelope::PresenceSync { channel_id, .. }
+            | Envelope::PresenceState { channel_id, .. }
+            | Envelope::Signal { channel_id, .. }
+            | Envelope::Sound { channel_id, .. } => channel_id,
+        }
+    }
+}
+
 struct Entry {
     member: VoiceMember,
     local: bool,

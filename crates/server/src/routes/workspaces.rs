@@ -10,8 +10,21 @@ use crate::state::AppState;
 use crate::store::WorkspaceRecord;
 use crate::ticket::{WorkspaceTicket, TICKET_VERSION};
 
+fn with_secret(mut wsp: Workspace, secret: String) -> Workspace {
+    wsp.secret = Some(secret);
+    wsp
+}
+
 pub async fn list(State(state): State<AppState>) -> AppResult<Json<Vec<Workspace>>> {
-    Ok(Json(state.store.list().await))
+    let items = state.store.list().await;
+    let mut out = Vec::with_capacity(items.len());
+    for wsp in items {
+        match state.store.record(&wsp.id).await {
+            Some(record) => out.push(with_secret(wsp, record.secret)),
+            None => out.push(wsp),
+        }
+    }
+    Ok(Json(out))
 }
 
 pub async fn create(
@@ -64,13 +77,13 @@ pub async fn create(
         icon_url: None,
         owner_id,
         owner_name,
-        secret,
+        secret: secret.clone(),
         ticket,
         channels,
         peers: Vec::new(),
         owner_endpoint_ticket: Some(endpoint_ticket),
     };
-    Ok(Json(state.store.upsert(record).await))
+    Ok(Json(with_secret(state.store.upsert(record).await, secret)))
 }
 
 pub async fn join(
@@ -96,19 +109,25 @@ pub async fn join(
         peers: vec![owner_peer.to_string()],
         owner_endpoint_ticket: Some(ticket.endpoint_ticket.clone()),
     };
-    Ok(Json(state.store.upsert(record).await))
+    Ok(Json(with_secret(
+        state.store.upsert(record).await,
+        ticket.secret.clone(),
+    )))
 }
 
 pub async fn get(
     State(state): State<AppState>,
     Path(id): Path<Id>,
 ) -> AppResult<Json<Workspace>> {
-    state
+    let record = state
         .store
-        .get(&id)
+        .record(&id)
         .await
-        .map(Json)
-        .ok_or_else(|| AppError::NotFound("workspace not found".to_string()))
+        .ok_or_else(|| AppError::NotFound("workspace not found".to_string()))?;
+    Ok(Json(with_secret(
+        record.to_workspace(),
+        record.secret.clone(),
+    )))
 }
 
 pub async fn ticket(

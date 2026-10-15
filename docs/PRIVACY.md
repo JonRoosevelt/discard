@@ -55,9 +55,16 @@ Backup = **exportação manual** de um arquivo de recuperação (a chave não é
   quem já tem acesso ao documento que o referencia.
 - **Mídia:** em mesh WebRTC, o áudio/vídeo é cifrado ponta a ponta por **DTLS-SRTP** entre os pares.
   O nó local não é intermediário da mídia.
-- **Defesa em profundidade (opcional):** o corpo de cada mensagem pode ser cifrado com uma chave
-  simétrica do workspace (AES-GCM, via WebCrypto) antes de entrar no documento, de modo que nem o
-  documento nem os blobs contenham texto claro.
+- **Defesa em profundidade (implementada):** o corpo de cada mensagem é cifrado no navegador com
+  **AES-256-GCM** (WebCrypto) antes de sair da UI, de modo que o nó local e o banco guardem apenas
+  ciphertext. A chave é derivada do `secret` do workspace (que já vem no `DocTicket`) via
+  **HKDF-SHA256** com `info="discard-content-v1"`. Envelope: `"E1:" + base64(nonce(12) || ciphertext)`.
+  Peers que têm o segredo do workspace descriptografam; quem não tem vê conteúdo opaco. Se `secret`
+  não estiver disponível, o texto é enviado sem cifra (fallback de compatibilidade).
+  **Escopo:** protege o conteúdo **em trânsito e em repouso** (gossip, blobs, disco) e **contra peers
+  sem a chave** — não contra o próprio nó local: sendo seu, ele conhece o `secret` e não é um servidor
+  central. Os **bytes de anexos** ainda não são cifrados no cliente; vão como blob, cujo acesso depende
+  do ticket do workspace.
 
 ### Cifra em repouso
 - Nó local: store de documentos e blobs em disco; a chave de identidade protegida por permissões e,

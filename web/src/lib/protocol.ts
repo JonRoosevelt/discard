@@ -20,6 +20,7 @@ export interface Workspace {
   icon_url: string | null
   owner_id: Id
   ticket: string | null
+  secret: string | null
   channels: Channel[]
 }
 

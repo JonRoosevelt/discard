@@ -31,6 +31,8 @@ pub struct Workspace {
     pub icon_url: Option<String>,
     pub owner_id: Id,
     pub ticket: String,
+    #[serde(default)]
+    pub secret: Option<String>,
     pub channels: Vec<Channel>,
 }
 

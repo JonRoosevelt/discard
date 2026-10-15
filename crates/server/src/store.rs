@@ -31,6 +31,7 @@ impl WorkspaceRecord {
             icon_url: self.icon_url.clone(),
             owner_id: self.owner_id.clone(),
             ticket: self.ticket.clone(),
+            secret: None,
             channels: self.channels.clone(),
         }
     }

@@ -1,5 +1,6 @@
 import { ws, onReconnect, onStatus } from './ws'
 import type { WsStatus } from './ws'
+import { decryptText, deriveKey, encryptText } from './crypto'
 import {
   Identity,
   createChannel as apiCreateChannel,
@@ -45,6 +46,50 @@ function channelById(id: Id): Channel | undefined {
     if (c) return c
   }
   return undefined
+}
+
+const contentKeys = new Map<Id, Promise<CryptoKey>>()
+const decoded = new Map<Id, string>()
+
+function workspaceOfChannel(channelId: Id): Workspace | undefined {
+  for (const w of app.workspaces) {
+    if (w.channels.some((c) => c.id === channelId)) return w
+  }
+  return undefined
+}
+
+function loadKey(w: Workspace): Promise<CryptoKey> {
+  const existing = contentKeys.get(w.id)
+  if (existing) return existing
+  const p = deriveKey(w.secret as string)
+  contentKeys.set(w.id, p)
+  p.catch(() => contentKeys.delete(w.id))
+  return p
+}
+
+function keyForChannel(channelId: Id): Promise<CryptoKey> | null {
+  const w = workspaceOfChannel(channelId)
+  if (!w || !w.secret) return null
+  return loadKey(w)
+}
+
+async function displayMessage(m: Message): Promise<Message> {
+  const known = decoded.get(m.id)
+  if (known !== undefined) return { ...m, content: known }
+  const key = await keyForChannel(m.channel_id)
+  if (!key) return m
+  let content: string
+  try {
+    content = await decryptText(key, m.content)
+  } catch {
+    content = '🔒 mensagem ilegível'
+  }
+  decoded.set(m.id, content)
+  return { ...m, content }
+}
+
+async function receiveMessage(m: Message): Promise<void> {
+  appendMessage(await displayMessage(m))
 }
 
 function refreshMembers(): void {
@@ -112,6 +157,7 @@ function handleEvent(ev: ServerEvent): void {
       app.identity = ev.identity
       app.workspaces = ev.workspaces
       app.sounds = ev.sounds
+      for (const w of ev.workspaces) if (w.secret) void loadKey(w)
       app.voice = ev.voice.filter(
         (v) => app.currentWorkspaceId == null || v.workspace_id === app.currentWorkspaceId,
       )
@@ -121,7 +167,7 @@ function handleEvent(ev: ServerEvent): void {
       refreshMembers()
       break
     case 'message':
-      appendMessage(ev.message)
+      void receiveMessage(ev.message)
       break
     case 'typing':
       setTyping(ev.channel_id, ev.user)
@@ -169,7 +215,7 @@ async function selectChannel(id: Id): Promise<void> {
   try {
     const msgs = await getMessages(id)
     if (app.currentChannelId === id) {
-      app.messages = msgs
+      app.messages = await Promise.all(msgs.map(displayMessage))
       refreshMembers()
     }
   } catch {
@@ -189,6 +235,7 @@ function selectWorkspace(id: Id): void {
   app.currentWorkspaceId = id
   app.voice = app.voice.filter((v) => v.workspace_id === id)
   const wsp = app.workspaces.find((w) => w.id === id)
+  if (wsp?.secret) void loadKey(wsp)
   const first = wsp?.channels.find((c) => c.kind === 'text') ?? wsp?.channels[0]
   if (first) {
     void selectChannel(first.id)
@@ -205,8 +252,10 @@ function selectWorkspace(id: Id): void {
 async function sendMessage(content: string, attachmentIds: Id[] = []): Promise<void> {
   const channelId = app.currentChannelId
   if (channelId == null) return
-  const m = await postMessage(channelId, content, attachmentIds)
-  appendMessage(m)
+  const key = await keyForChannel(channelId)
+  const payload = key && content.length > 0 ? await encryptText(key, content) : content
+  const m = await postMessage(channelId, payload, attachmentIds)
+  appendMessage(await displayMessage(m))
 }
 
 async function reloadSounds(): Promise<void> {

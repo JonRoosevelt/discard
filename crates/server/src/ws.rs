@@ -37,9 +37,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (tx, mut rx) = mpsc::unbounded_channel::<ServerEvent>();
     let conn = state.hub.register(tx);
 
+    let workspaces = state.store.list().await;
+    let workspace_ids: Vec<Id> = workspaces.iter().map(|w| w.id.clone()).collect();
     let ready = ServerEvent::Ready {
         identity: state.identity.shared(),
-        workspaces: state.store.list().await,
+        workspaces,
         voice: state.voice.snapshot(),
         sounds: state.sounds.list().await,
     };
@@ -50,6 +52,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     {
         state.hub.unregister(conn);
         return;
+    }
+
+    for workspace_id in workspace_ids {
+        ensure_workspace_subscription(&state, &workspace_id).await;
     }
 
     let mut heartbeat = tokio::time::interval(Duration::from_secs(60));
@@ -175,7 +181,7 @@ async fn handle_client_event(
             let presence = state
                 .voice
                 .join(&channel_id, &channel.workspace_id, member.clone());
-            ensure_subscription(state, &channel_id).await;
+            ensure_workspace_subscription(state, &channel.workspace_id).await;
             let sync = Envelope::PresenceSync {
                 channel_id: channel_id.clone(),
                 from: state.identity.public_id(),
@@ -264,7 +270,7 @@ async fn handle_client_event(
                 );
                 return;
             }
-            ensure_subscription(state, &channel_id).await;
+            ensure_workspace_subscription(state, &channel.workspace_id).await;
             let by = state.identity.public_id();
             let envelope = Envelope::Sound {
                 channel_id: channel_id.clone(),
@@ -299,13 +305,18 @@ async fn leave_voice(state: &AppState, channel_id: &Id) {
 }
 
 pub async fn broadcast_envelope(state: &AppState, channel_id: &Id, envelope: Envelope) {
+    let Some(channel) = state.store.channel(channel_id).await else {
+        return;
+    };
+    let workspace_id = channel.workspace_id;
+    ensure_workspace_subscription(state, &workspace_id).await;
     let net = state.net().await;
-    if !net.has_channel(channel_id) {
+    if !net.has_workspace(&workspace_id) {
         return;
     }
     match serde_json::to_vec(&envelope) {
         Ok(bytes) => {
-            if let Err(e) = net.broadcast_channel(channel_id, bytes).await {
+            if let Err(e) = net.broadcast_workspace(&workspace_id, bytes).await {
                 tracing::debug!("voice gossip broadcast failed: {e}");
             }
         }
@@ -314,6 +325,9 @@ pub async fn broadcast_envelope(state: &AppState, channel_id: &Id, envelope: Env
 }
 
 pub async fn voice_tick(state: &AppState) {
+    for workspace in state.store.list().await {
+        ensure_workspace_subscription(state, &workspace.id).await;
+    }
     for (channel_id, workspace_id, user_id) in state.voice.expire_stale() {
         state.hub.broadcast_all(ServerEvent::VoiceLeft {
             channel_id,
@@ -404,6 +418,32 @@ pub async fn ensure_subscription(state: &AppState, channel_id: &Id) {
     }
 }
 
+pub async fn ensure_workspace_subscription(state: &AppState, workspace_id: &Id) {
+    let net = state.net().await;
+    if net.has_workspace(workspace_id) {
+        return;
+    }
+    let Some(record) = state.store.record(workspace_id).await else {
+        return;
+    };
+    let bootstrap: Vec<_> = state
+        .store
+        .peers(workspace_id)
+        .await
+        .iter()
+        .filter_map(|peer| net.parse_peer(peer))
+        .collect();
+    match net
+        .subscribe_workspace(workspace_id, &record.secret, bootstrap)
+        .await
+    {
+        Ok((_sender, receiver)) => {
+            spawn_workspace_receiver(state.clone(), workspace_id.clone(), receiver)
+        }
+        Err(e) => tracing::debug!("could not subscribe to workspace {}: {e}", workspace_id),
+    }
+}
+
 fn spawn_receiver(
     state: AppState,
     channel_id: Id,
@@ -434,17 +474,40 @@ fn spawn_receiver(
     });
 }
 
-async fn handle_payload(state: &AppState, channel_id: &Id, workspace_id: &Id, bytes: Vec<u8>) {
-    if let Ok(wire) = serde_json::from_slice::<Wire>(&bytes) {
-        match wire {
-            Wire::Message { message } => {
-                handle_message(state, channel_id, workspace_id, message).await
+fn spawn_workspace_receiver(state: AppState, workspace_id: Id, mut receiver: GossipReceiver) {
+    tokio::spawn(async move {
+        if tokio::time::timeout(OP_TIMEOUT, receiver.joined()).await.is_err() {
+            tracing::debug!("gossip join timed out for workspace {workspace_id}");
+        }
+        loop {
+            match tokio::time::timeout(Duration::from_secs(120), receiver.next()).await {
+                Ok(Some(Ok(Event::Received(msg)))) => {
+                    handle_workspace_payload(&state, &workspace_id, msg.content.to_vec()).await;
+                }
+                Ok(Some(Ok(Event::NeighborUp(peer)))) => {
+                    state.store.add_peer(&workspace_id, &peer.to_string()).await;
+                }
+                Ok(Some(Ok(_))) => {}
+                Ok(Some(Err(e))) => {
+                    tracing::debug!("gossip stream error: {e}");
+                    break;
+                }
+                Ok(None) => break,
+                Err(_) => continue,
             }
         }
-        return;
+    });
+}
+
+async fn handle_payload(state: &AppState, channel_id: &Id, workspace_id: &Id, bytes: Vec<u8>) {
+    if let Ok(Wire::Message { message }) = serde_json::from_slice::<Wire>(&bytes) {
+        handle_message(state, channel_id, workspace_id, message).await;
     }
+}
+
+async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Vec<u8>) {
     if let Ok(envelope) = serde_json::from_slice::<Envelope>(&bytes) {
-        handle_voice(state, channel_id, workspace_id, envelope).await;
+        handle_voice(state, workspace_id, envelope).await;
     }
 }
 
@@ -476,33 +539,30 @@ async fn handle_message(state: &AppState, channel_id: &Id, workspace_id: &Id, me
     }
 }
 
-async fn handle_voice(state: &AppState, channel_id: &Id, workspace_id: &Id, envelope: Envelope) {
+async fn handle_voice(state: &AppState, workspace_id: &Id, envelope: Envelope) {
+    let channel_id = envelope.channel_id().clone();
+    match state.store.channel(&channel_id).await {
+        Some(channel) if &channel.workspace_id == workspace_id => {}
+        _ => return,
+    }
     match envelope {
-        Envelope::PresenceJoin {
-            channel_id: cid,
-            member,
-            ..
-        } if &cid == channel_id => {
-            let presence = state.voice.remote_join(channel_id, workspace_id, member);
+        Envelope::PresenceJoin { member, .. } => {
+            let presence = state.voice.remote_join(&channel_id, workspace_id, member);
             state
                 .hub
                 .broadcast_all(ServerEvent::VoiceJoined { presence });
         }
-        Envelope::PresenceUpdate {
-            channel_id: cid,
-            member,
-        } if &cid == channel_id => {
-            state.voice.remote_update(channel_id, workspace_id, member.clone());
+        Envelope::PresenceUpdate { member, .. } => {
+            state
+                .voice
+                .remote_update(&channel_id, workspace_id, member.clone());
             state.hub.broadcast_all(ServerEvent::VoiceUpdated {
                 channel_id: channel_id.clone(),
                 member,
             });
         }
-        Envelope::PresenceLeave {
-            channel_id: cid,
-            user_id,
-        } if &cid == channel_id => {
-            if let Some(workspace_id) = state.voice.remote_leave(channel_id, &user_id) {
+        Envelope::PresenceLeave { user_id, .. } => {
+            if let Some(workspace_id) = state.voice.remote_leave(&channel_id, &user_id) {
                 state.hub.broadcast_all(ServerEvent::VoiceLeft {
                     channel_id: channel_id.clone(),
                     workspace_id,
@@ -510,50 +570,39 @@ async fn handle_voice(state: &AppState, channel_id: &Id, workspace_id: &Id, enve
                 });
             }
         }
-        Envelope::PresenceSync {
-            channel_id: cid, ..
-        } if &cid == channel_id => {
-            let members = state.voice.members_of(channel_id);
+        Envelope::PresenceSync { .. } => {
+            let members = state.voice.members_of(&channel_id);
             if !members.is_empty() {
                 let state_envelope = Envelope::PresenceState {
                     channel_id: channel_id.clone(),
                     members,
                 };
-                broadcast_envelope(state, channel_id, state_envelope).await;
+                broadcast_envelope(state, &channel_id, state_envelope).await;
             }
         }
-        Envelope::PresenceState {
-            channel_id: cid,
-            members,
-        } if &cid == channel_id => {
-            state.voice.merge_state(channel_id, workspace_id, members);
-            if let Some(presence) = state.voice.presence(channel_id) {
+        Envelope::PresenceState { members, .. } => {
+            state
+                .voice
+                .merge_state(&channel_id, workspace_id, members);
+            if let Some(presence) = state.voice.presence(&channel_id) {
                 state
                     .hub
                     .broadcast_all(ServerEvent::VoicePresence { presence });
             }
         }
-        Envelope::Signal {
-            channel_id: cid,
-            to,
-            from,
-            data,
-        } if &cid == channel_id => {
+        Envelope::Signal { to, from, data, .. } => {
             if to == state.identity.public_id() {
                 state.hub.broadcast_all(ServerEvent::Signal { from, data });
             }
         }
-        Envelope::Sound {
-            channel_id: cid,
-            sound_id,
-            by,
-        } if &cid == channel_id => {
-            state.hub.broadcast_all(ServerEvent::SoundPlay {
-                channel_id: channel_id.clone(),
-                sound_id,
-                by,
-            });
+        Envelope::Sound { sound_id, by, .. } => {
+            if state.voice.local_member(&channel_id).is_some() {
+                state.hub.broadcast_all(ServerEvent::SoundPlay {
+                    channel_id: channel_id.clone(),
+                    sound_id,
+                    by,
+                });
+            }
         }
-        _ => {}
     }
 }

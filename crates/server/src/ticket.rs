@@ -52,3 +52,15 @@ pub fn topic_id(secret_hex: &str, channel_id: &str) -> anyhow::Result<iroh_gossi
     let hash = blake3::hash(&input);
     Ok(iroh_gossip::TopicId::from_bytes(*hash.as_bytes()))
 }
+
+pub const REALTIME_TOPIC_LABEL: &[u8] = b"discard-realtime-v1";
+
+pub fn workspace_topic_id(secret_hex: &str) -> anyhow::Result<iroh_gossip::TopicId> {
+    let secret = hex::decode(secret_hex)
+        .map_err(|_| anyhow::anyhow!("secret is not valid hex"))?;
+    let mut input = Vec::with_capacity(REALTIME_TOPIC_LABEL.len() + secret.len());
+    input.extend_from_slice(REALTIME_TOPIC_LABEL);
+    input.extend_from_slice(&secret);
+    let hash = blake3::hash(&input);
+    Ok(iroh_gossip::TopicId::from_bytes(*hash.as_bytes()))
+}
