@@ -10,6 +10,10 @@ A **minimalist, P2P and ephemeral** Discord clone.
 - **Strong privacy**: E2E encryption by default, zero third parties, keys only on the device.
   See [`docs/PRIVACY.md`](docs/PRIVACY.md).
 
+<img width="1342" height="718" alt="image" src="https://github.com/user-attachments/assets/0c91c6eb-7a24-4efa-a436-fd168499562e" />
+<img width="1342" height="718" alt="image" src="https://github.com/user-attachments/assets/8f6795f2-8315-40f7-af89-44c7eac85a9e" />
+
+
 ## Architecture
 
 ```
