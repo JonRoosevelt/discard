@@ -18,6 +18,12 @@ use shared::{Id, Message};
 
 pub const OP_TIMEOUT: Duration = Duration::from_secs(20);
 
+// iroh-gossip's default is 4096; an oversized frame makes its send loop exit without closing
+// the connection, so the actor blocks on the full per-peer queue and every topic goes dead.
+// SDP offers with audio+video are ~5-10 KB. All peers must agree: the reader rejects larger frames.
+const GOSSIP_MAX_MESSAGE_SIZE: usize = 64 * 1024;
+const MAX_PAYLOAD: usize = GOSSIP_MAX_MESSAGE_SIZE - 1024;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
 pub enum Wire {
@@ -71,7 +77,9 @@ impl IrohNet {
             .await
             .context("bind iroh endpoint")?;
 
-        let gossip = Gossip::builder().spawn(endpoint.clone());
+        let gossip = Gossip::builder()
+            .max_message_size(GOSSIP_MAX_MESSAGE_SIZE)
+            .spawn(endpoint.clone());
 
         std::fs::create_dir_all(blobs_dir)?;
         let store = FsStore::load(blobs_dir)
@@ -163,6 +171,9 @@ impl IrohNet {
 
     #[allow(dead_code)]
     pub async fn broadcast_channel(&self, channel_id: &Id, bytes: Vec<u8>) -> anyhow::Result<()> {
+        if bytes.len() > MAX_PAYLOAD {
+            anyhow::bail!("payload too large for gossip: {} bytes", bytes.len());
+        }
         let sender = self
             .channel_sender(channel_id)
             .ok_or_else(|| anyhow::anyhow!("not subscribed to channel {channel_id}"))?;
@@ -171,6 +182,14 @@ impl IrohNet {
             .context("gossip broadcast timeout")?
             .context("gossip broadcast failed")?;
         Ok(())
+    }
+
+    pub fn drop_channel(&self, channel_id: &Id) {
+        self.subscriptions.remove(channel_id);
+    }
+
+    pub fn drop_workspace(&self, workspace_id: &Id) {
+        self.workspace_subscriptions.remove(workspace_id);
     }
 
     pub fn has_workspace(&self, workspace_id: &Id) -> bool {
@@ -204,6 +223,9 @@ impl IrohNet {
         workspace_id: &Id,
         bytes: Vec<u8>,
     ) -> anyhow::Result<()> {
+        if bytes.len() > MAX_PAYLOAD {
+            anyhow::bail!("payload too large for gossip: {} bytes", bytes.len());
+        }
         let sender = self
             .workspace_sender(workspace_id)
             .ok_or_else(|| anyhow::anyhow!("not subscribed to workspace {workspace_id}"))?;
@@ -215,6 +237,10 @@ impl IrohNet {
     }
 
     pub async fn broadcast_reliable(&self, workspace_id: &Id, id: String, bytes: Vec<u8>) {
+        if bytes.len() > MAX_PAYLOAD {
+            tracing::warn!("dropping {} byte frame: over gossip limit", bytes.len());
+            return;
+        }
         self.pending.insert(
             id,
             Pending {
@@ -264,7 +290,9 @@ impl IrohNet {
                     self.pending.remove(&id);
                     continue;
                 }
-                let _ = self.broadcast_workspace(&workspace_id, bytes).await;
+                let _ = self
+                    .broadcast_workspace(&workspace_id, with_attempt(&bytes, attempts + 1))
+                    .await;
                 if let Some(mut p) = self.pending.get_mut(&id) {
                     p.attempts += 1;
                     p.last = now;
@@ -337,5 +365,17 @@ impl IrohNet {
 
     pub async fn shutdown(self: Arc<Self>) {
         let _ = self.router.shutdown().await;
+    }
+}
+
+// Plumtree dedups by content hash for 90s, so an identical retransmit never reaches a peer that
+// already got the frame and lost our ack; varying the bytes makes it re-ack.
+fn with_attempt(bytes: &[u8], attempt: u32) -> Vec<u8> {
+    match serde_json::from_slice::<serde_json::Value>(bytes) {
+        Ok(serde_json::Value::Object(mut map)) => {
+            map.insert("r".into(), attempt.into());
+            serde_json::to_vec(&map).unwrap_or_else(|_| bytes.to_vec())
+        }
+        _ => bytes.to_vec(),
     }
 }

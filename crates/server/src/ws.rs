@@ -391,7 +391,12 @@ pub async fn build_message(
     let short: String = author.id.chars().take(8).collect();
     let attachments = state.retention.resolve_attachments(&attachment_ids);
     Message {
-        id: format!("{}-{}", created_at.timestamp_millis(), short),
+        id: format!(
+            "{}-{}-{}",
+            created_at.timestamp_millis(),
+            short,
+            hex::encode(rand::random::<[u8; 4]>())
+        ),
         channel_id: channel_id.clone(),
         author,
         content: content.to_string(),
@@ -431,7 +436,7 @@ pub async fn ensure_subscription(state: &AppState, channel_id: &Id) {
     let bootstrap = owner_bootstrap(state, &net, &workspace_id).await;
     match net.subscribe_channel(channel_id, &secret, bootstrap).await {
         Ok((_sender, receiver)) => {
-            spawn_receiver(state.clone(), channel_id.clone(), workspace_id, receiver)
+            spawn_receiver(state.clone(), net.clone(), channel_id.clone(), workspace_id, receiver)
         }
         Err(e) => tracing::debug!("could not subscribe to channel {}: {e}", channel_id),
     }
@@ -451,7 +456,7 @@ pub async fn ensure_workspace_subscription(state: &AppState, workspace_id: &Id) 
         .await
     {
         Ok((_sender, receiver)) => {
-            spawn_workspace_receiver(state.clone(), workspace_id.clone(), receiver)
+            spawn_workspace_receiver(state.clone(), net.clone(), workspace_id.clone(), receiver)
         }
         Err(e) => tracing::debug!("could not subscribe to workspace {}: {e}", workspace_id),
     }
@@ -459,6 +464,7 @@ pub async fn ensure_workspace_subscription(state: &AppState, workspace_id: &Id) 
 
 fn spawn_receiver(
     state: AppState,
+    net: std::sync::Arc<IrohNet>,
     channel_id: Id,
     workspace_id: Id,
     mut receiver: GossipReceiver,
@@ -484,10 +490,16 @@ fn spawn_receiver(
                 Err(_) => continue,
             }
         }
+        net.drop_channel(&channel_id);
     });
 }
 
-fn spawn_workspace_receiver(state: AppState, workspace_id: Id, mut receiver: GossipReceiver) {
+fn spawn_workspace_receiver(
+    state: AppState,
+    net: std::sync::Arc<IrohNet>,
+    workspace_id: Id,
+    mut receiver: GossipReceiver,
+) {
     tokio::spawn(async move {
         if tokio::time::timeout(OP_TIMEOUT, receiver.joined()).await.is_err() {
             tracing::debug!("gossip join timed out for workspace {workspace_id}");
@@ -509,6 +521,8 @@ fn spawn_workspace_receiver(state: AppState, workspace_id: Id, mut receiver: Gos
                 Err(_) => continue,
             }
         }
+        // Without this the stale sender keeps has_workspace() true and we never resubscribe.
+        net.drop_workspace(&workspace_id);
     });
 }
 
