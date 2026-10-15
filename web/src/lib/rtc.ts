@@ -281,7 +281,7 @@ export class VoiceSession {
   private peerState(id: Id): PeerState {
     let state = this.peers.get(id)
     if (!state) {
-      state = { id, stream: null, video: false, screen: false, muted: false, conn: 'new' }
+      state = { id, stream: null, video: false, screen: false, muted: false, conn: '' }
       this.peers.set(id, state)
     }
     return state
@@ -312,9 +312,11 @@ export class VoiceSession {
     }
     pc.onconnectionstatechange = () => {
       this.peerState(id).conn = pc.connectionState
+      console.log('[rtc] pc', id.slice(0, 8), '->', pc.connectionState, 'ice:', pc.iceConnectionState)
       this.notify()
     }
     pc.ontrack = (e) => {
+      console.log('[rtc] ontrack', id.slice(0, 8), e.track.kind)
       if (!stream.getTracks().some((t) => t.id === e.track.id)) stream.addTrack(e.track)
       this.peerState(id).stream = stream
       this.notify()
@@ -347,9 +349,11 @@ export class VoiceSession {
       peer.makingOffer = true
       const offer = await peer.pc.createOffer()
       await peer.pc.setLocalDescription(offer)
+      console.log('[rtc] offer ->', peerId.slice(0, 8), 'sdp', (offer.sdp ?? '').length, 'bytes')
       this.sendSignal(peerId, { kind: 'offer', sdp: offer.sdp ?? '' })
-    } catch {
-      this.error = 'Falha ao iniciar a conexão'
+    } catch (e) {
+      console.error('[rtc] startOffer error', e)
+      this.error = `Falha ao iniciar a conexão: ${String(e)}`
       this.notify()
     } finally {
       peer.makingOffer = false
@@ -358,6 +362,7 @@ export class VoiceSession {
 
   private async onSignal(from: Id, data: SignalData): Promise<void> {
     if (this.closed || from === this.selfId) return
+    if (data.kind !== 'ice') console.log('[rtc] signal in', data.kind, 'from', from.slice(0, 8))
     let peer = this.pcs.get(from)
     if (!peer) {
       peer = this.createPeer(from)
@@ -394,8 +399,10 @@ export class VoiceSession {
         await peer.pc.setLocalDescription(answer)
         await this.flushIce(peer)
         this.sendSignal(from, { kind: 'answer', sdp: answer.sdp ?? '' })
-      } catch {
-        void 0
+      } catch (e) {
+        console.error('[rtc] answer error', e)
+        this.error = `Falha ao responder: ${String(e)}`
+        this.notify()
       }
       return
     }
@@ -403,8 +410,10 @@ export class VoiceSession {
       try {
         await peer.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp })
         await this.flushIce(peer)
-      } catch {
-        void 0
+      } catch (e) {
+        console.error('[rtc] setAnswer error', e)
+        this.error = `Falha no answer: ${String(e)}`
+        this.notify()
       }
     }
   }
