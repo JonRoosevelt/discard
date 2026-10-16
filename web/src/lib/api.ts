@@ -205,3 +205,11 @@ export function uploadSound(file: File, name: string, emoji: string): Promise<So
   fd.append('emoji', emoji)
   return api<Sound>('/sounds', { method: 'POST', body: fd })
 }
+
+export function updateSound(id: string, name: string, emoji: string): Promise<Sound> {
+  return api<Sound>(`/sounds/${id}`, { method: 'PATCH', body: JSON.stringify({ name, emoji }) })
+}
+
+export function deleteSound(id: string): Promise<void> {
+  return api<void>(`/sounds/${id}`, { method: 'DELETE' })
+}

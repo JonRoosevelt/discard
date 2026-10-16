@@ -197,6 +197,9 @@ function handleEvent(ev: ServerEvent): void {
       }
       break
     }
+    case 'sounds':
+      app.sounds = ev.sounds
+      break
     case 'sound_play':
     case 'signal':
     case 'error':

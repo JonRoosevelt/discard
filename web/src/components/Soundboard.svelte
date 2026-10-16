@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte'
   import { app } from '../lib/state.svelte'
   import { ws } from '../lib/ws'
-  import { uploadSound } from '../lib/api'
+  import { deleteSound, updateSound, uploadSound } from '../lib/api'
   import type { ServerEvent, Sound } from '../lib/protocol'
 
   const GAIN = 0.85
@@ -13,6 +13,11 @@
   let newEmoji = $state('🔊')
   let newName = $state('')
   let fileEl = $state<HTMLInputElement>()
+  let editing = $state<Sound | null>(null)
+  let editName = $state('')
+  let editEmoji = $state('')
+
+  const mine = (sound: Sound): boolean => !sound.builtin && sound.owner === app.identity?.public_id
 
   let myChannelId = $derived.by(() => {
     const me = app.identity?.public_id
@@ -43,6 +48,34 @@
   })
 
   onDestroy(off)
+
+  function startEdit(sound: Sound): void {
+    editing = sound
+    editName = sound.name
+    editEmoji = sound.emoji
+    error = ''
+  }
+
+  async function saveEdit(): Promise<void> {
+    if (!editing) return
+    try {
+      await updateSound(editing.id, editName.trim(), editEmoji.trim() || '🔊')
+      await app.reloadSounds()
+      editing = null
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to update sound'
+    }
+  }
+
+  async function remove(sound: Sound): Promise<void> {
+    if (!confirm(`Delete "${sound.name}" for everyone?`)) return
+    try {
+      await deleteSound(sound.id)
+      await app.reloadSounds()
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to delete sound'
+    }
+  }
 
   function pickFile(): void {
     if (uploading) return
@@ -93,20 +126,47 @@
 
   <div class="grid">
     {#each app.sounds as sound (sound.id)}
-      <button
-        class="sound"
-        type="button"
-        title={sound.name}
-        aria-label={sound.name}
-        disabled={!inVoice}
-        onclick={() => trigger(sound)}
-      >
-        {sound.emoji || '🔊'}
-      </button>
+      <div class="cell">
+        <button
+          class="sound"
+          type="button"
+          title={sound.name}
+          aria-label={sound.name}
+          disabled={!inVoice}
+          onclick={() => trigger(sound)}
+        >
+          {sound.emoji || '🔊'}
+        </button>
+        {#if mine(sound)}
+          <div class="actions">
+            <button
+              type="button"
+              title="Edit sound"
+              aria-label={`Edit ${sound.name}`}
+              onclick={() => startEdit(sound)}>✎</button
+            >
+            <button
+              type="button"
+              title="Delete sound"
+              aria-label={`Delete ${sound.name}`}
+              onclick={() => remove(sound)}>✕</button
+            >
+          </div>
+        {/if}
+      </div>
     {:else}
       <p class="empty">No sounds yet.</p>
     {/each}
   </div>
+
+  {#if editing}
+    <form class="upload" onsubmit={(e) => { e.preventDefault(); void saveEdit() }}>
+      <input class="emoji-in" bind:value={editEmoji} maxlength="4" aria-label="Edit sound emoji" />
+      <input class="name-in" bind:value={editName} maxlength="24" aria-label="Edit sound name" />
+      <button class="add" type="submit" title="Save sound" aria-label="Save sound">✓</button>
+      <button class="add cancel" type="button" title="Cancel" aria-label="Cancel editing" onclick={() => (editing = null)}>✕</button>
+    </form>
+  {/if}
 
   <div class="upload">
     <input class="emoji-in" bind:value={newEmoji} maxlength="4" aria-label="Sound emoji" />
@@ -188,6 +248,48 @@
     gap: 6px;
     max-height: 200px;
     overflow-y: auto;
+  }
+
+  .cell {
+    position: relative;
+    display: grid;
+  }
+
+  .actions {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: none;
+    gap: 2px;
+  }
+
+  .cell:hover .actions,
+  .cell:focus-within .actions {
+    display: flex;
+  }
+
+  .actions button {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    line-height: 1;
+    color: var(--text-0);
+    background: var(--bg-0);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .actions button:hover {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .add.cancel {
+    background: var(--bg-3);
   }
 
   .sound {

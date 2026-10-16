@@ -73,6 +73,10 @@ pub struct Sound {
     pub url: String,
     pub emoji: String,
     pub builtin: bool,
+    #[serde(default)]
+    pub owner: String,
+    #[serde(default)]
+    pub hash: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -178,6 +182,7 @@ pub enum ServerEvent {
         sounds: Vec<Sound>,
         ice_servers: Vec<IceServer>,
     },
+    Sounds { sounds: Vec<Sound> },
     Message { message: Message },
     MessageDeleted { channel_id: Id, id: Id },
     Typing { channel_id: Id, user: UserPublic },

@@ -7,12 +7,13 @@ use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use iroh_gossip::api::{Event, GossipReceiver};
 use serde::{Deserialize, Serialize};
-use shared::{ChannelKind, ClientEvent, Id, Message, ServerEvent, UserPublic, VoiceMember};
+use shared::{ChannelKind, ClientEvent, Id, Message, ServerEvent, Sound, UserPublic, VoiceMember};
 use tokio::sync::mpsc;
 
 use crate::error::AppError;
 use crate::hub::ConnId;
 use crate::iroh_net::{IrohNet, Wire, OP_TIMEOUT};
+use crate::sounds;
 use crate::state::AppState;
 use crate::voice::Envelope;
 
@@ -42,6 +43,8 @@ enum Frame {
     Msg { id: String, message: Message },
     Env { id: String, envelope: Envelope },
     Ack { id: String },
+    SoundSet { id: String, from: Id, sound: Sound },
+    SoundDel { id: String, sound_id: String, owner: Id },
 }
 
 pub async fn handler(
@@ -310,6 +313,7 @@ async fn handle_client_event(
                 channel_id: channel_id.clone(),
                 sound_id: sound_id.clone(),
                 by: by.clone(),
+                sound: state.sounds.get(&sound_id).await,
             };
             broadcast_envelope(state, &channel_id, envelope).await;
             state.hub.broadcast_all(ServerEvent::SoundPlay {
@@ -524,6 +528,8 @@ fn spawn_workspace_receiver(
                 }
                 Ok(Some(Ok(Event::NeighborUp(peer)))) => {
                     state.store.add_peer(&workspace_id, &peer.to_string()).await;
+                    let (state, workspace_id) = (state.clone(), workspace_id.clone());
+                    tokio::spawn(async move { announce_sounds(&state, &workspace_id).await });
                 }
                 Ok(Some(Ok(_))) => {}
                 Ok(Some(Err(e))) => {
@@ -571,6 +577,89 @@ async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Ve
                 handle_voice(state, workspace_id, envelope).await;
             }
         }
+        Frame::SoundSet { id, from, sound } => {
+            send_ack(state, workspace_id, &id).await;
+            if net.mark_seen(&id) {
+                ingest_sound(state, &from, sound).await;
+            }
+        }
+        Frame::SoundDel { id, sound_id, owner } => {
+            send_ack(state, workspace_id, &id).await;
+            if net.mark_seen(&id) && state.sounds.remove(&sound_id, &owner).await {
+                broadcast_sounds(state).await;
+            }
+        }
+    }
+}
+
+async fn broadcast_sounds(state: &AppState) {
+    state.hub.broadcast_all(ServerEvent::Sounds {
+        sounds: state.sounds.list().await,
+    });
+}
+
+async fn ingest_sound(state: &AppState, from: &Id, mut sound: Sound) {
+    sound.builtin = false;
+    sound.url = format!("/files/{}", sound.hash);
+    if !sounds::valid(&sound) || state.sounds.get(&sound.id).await.as_ref() == Some(&sound) {
+        return;
+    }
+    let net = state.net().await;
+    let Some(peer) = net.parse_peer(from) else {
+        return;
+    };
+    if let Err(e) = net.download_capped(&sound.hash, peer, sounds::MAX_BYTES as u64).await {
+        tracing::debug!("sound download failed: {e}");
+        return;
+    }
+    let _ = net.tag_blob(&sound.hash).await;
+    if state.sounds.merge(sound).await {
+        broadcast_sounds(state).await;
+    }
+}
+
+async fn broadcast_frame(state: &AppState, workspace_id: &Id, frame: Frame, id: String) {
+    ensure_workspace_subscription(state, workspace_id).await;
+    let net = state.net().await;
+    if !net.has_workspace(workspace_id) {
+        return;
+    }
+    if let Ok(bytes) = serde_json::to_vec(&frame) {
+        net.broadcast_reliable(workspace_id, id, bytes).await;
+    }
+}
+
+async fn announce_sound_in(state: &AppState, workspace_id: &Id, sound: &Sound) {
+    let id = hex::encode(rand::random::<[u8; 8]>());
+    let frame = Frame::SoundSet {
+        id: id.clone(),
+        from: state.identity.public_id(),
+        sound: sound.clone(),
+    };
+    broadcast_frame(state, workspace_id, frame, id).await;
+}
+
+pub async fn announce_sound(state: &AppState, sound: &Sound) {
+    for workspace in state.store.list().await {
+        announce_sound_in(state, &workspace.id, sound).await;
+    }
+}
+
+async fn announce_sounds(state: &AppState, workspace_id: &Id) {
+    for sound in state.sounds.uploads().await {
+        announce_sound_in(state, workspace_id, &sound).await;
+    }
+}
+
+pub async fn announce_sound_delete(state: &AppState, sound_id: &str, owner: &Id) {
+    for workspace in state.store.list().await {
+        let id = hex::encode(rand::random::<[u8; 8]>());
+        let frame = Frame::SoundDel {
+            id: id.clone(),
+            sound_id: sound_id.to_string(),
+            owner: owner.clone(),
+        };
+        broadcast_frame(state, &workspace.id, frame, id).await;
     }
 }
 
@@ -666,8 +755,13 @@ async fn handle_voice(state: &AppState, workspace_id: &Id, envelope: Envelope) {
                 state.hub.broadcast_all(ServerEvent::Signal { from, data, session });
             }
         }
-        Envelope::Sound { sound_id, by, .. } => {
+        Envelope::Sound { sound_id, by, sound, .. } => {
             if state.voice.local_member(&channel_id).is_some() {
+                if let Some(sound) = sound.filter(|s| s.id == sound_id) {
+                    if state.sounds.get(&sound_id).await.is_none() {
+                        ingest_sound(state, &by, sound).await;
+                    }
+                }
                 state.hub.broadcast_all(ServerEvent::SoundPlay {
                     channel_id: channel_id.clone(),
                     sound_id,
