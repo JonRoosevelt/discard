@@ -13,6 +13,7 @@ mod sounds;
 mod state;
 mod store;
 mod ticket;
+mod turn;
 mod voice;
 mod ws;
 
@@ -39,12 +40,14 @@ async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&config.data_dir)?;
 
     let identity = Arc::new(LocalIdentity::load_or_create(&config.data_dir)?);
+    let turn = turn::Turn::start().await?;
     let net = IrohNet::start(
         identity.secret_key(),
         config.offline,
         config.no_relay,
         config.iroh_bind,
         &config.blobs_dir(),
+        turn.clone(),
     )
     .await?;
 
@@ -65,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
         retention: retention.clone(),
         hub,
         voice,
+        turn,
         sounds,
         config: config.clone(),
         session_token: session_token.clone(),

@@ -127,6 +127,13 @@ pub struct SendMessageRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IceServer {
+    pub urls: Vec<String>,
+    pub username: String,
+    pub credential: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SignalData {
     Offer { sdp: String },
@@ -163,6 +170,7 @@ pub enum ServerEvent {
         workspaces: Vec<Workspace>,
         voice: Vec<VoicePresence>,
         sounds: Vec<Sound>,
+        ice_servers: Vec<IceServer>,
     },
     Message { message: Message },
     MessageDeleted { channel_id: Id, id: Id },

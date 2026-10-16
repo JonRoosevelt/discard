@@ -67,6 +67,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         workspaces,
         voice: state.voice.snapshot(),
         sounds: state.sounds.list().await,
+        ice_servers: vec![state.turn.ice_server()],
     };
     if sender
         .send(WsMessage::Text(ready.to_json().into()))
@@ -262,6 +263,7 @@ async fn handle_client_event(
             leave_voice(state, &channel_id).await;
         }
         ClientEvent::Signal { to, data } => {
+            state.turn.add_peer(&to);
             let Some(channel_id) = state.voice.active_voice_channel() else {
                 state.hub.send_to_conn(
                     conn,
@@ -659,6 +661,7 @@ async fn handle_voice(state: &AppState, workspace_id: &Id, envelope: Envelope) {
         }
         Envelope::Signal { to, from, data, .. } => {
             if to == state.identity.public_id() {
+                state.turn.add_peer(&from);
                 state.hub.broadcast_all(ServerEvent::Signal { from, data });
             }
         }

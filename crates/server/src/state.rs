@@ -9,6 +9,7 @@ use crate::iroh_net::IrohNet;
 use crate::retention::Retention;
 use crate::sounds::SoundStore;
 use crate::store::Store;
+use crate::turn::Turn;
 use crate::voice::Voice;
 
 #[derive(Clone)]
@@ -19,6 +20,7 @@ pub struct AppState {
     pub retention: Arc<Retention>,
     pub hub: Arc<Hub>,
     pub voice: Arc<Voice>,
+    pub turn: Arc<Turn>,
     pub sounds: Arc<SoundStore>,
     pub config: Arc<Config>,
     pub session_token: String,
@@ -36,6 +38,7 @@ impl AppState {
             self.config.no_relay,
             self.config.iroh_bind,
             &self.config.blobs_dir(),
+            self.turn.clone(),
         )
         .await?;
         let old = {

@@ -16,6 +16,8 @@ use iroh_tickets::endpoint::EndpointTicket;
 use serde::{Deserialize, Serialize};
 use shared::{Id, Message};
 
+use crate::turn::Turn;
+
 pub const OP_TIMEOUT: Duration = Duration::from_secs(20);
 
 // iroh-gossip's default is 4096; an oversized frame makes its send loop exit without closing
@@ -56,6 +58,7 @@ impl IrohNet {
         no_relay: bool,
         bind_addr: Option<std::net::SocketAddr>,
         blobs_dir: &Path,
+        turn: Arc<Turn>,
     ) -> anyhow::Result<Arc<Self>> {
         let lookup = MemoryLookup::new();
         let mut builder = if offline {
@@ -89,7 +92,9 @@ impl IrohNet {
         let router = Router::builder(endpoint.clone())
             .accept(iroh_gossip::ALPN, gossip.clone())
             .accept(iroh_blobs::ALPN, BlobsProtocol::new(&store, None))
+            .accept(crate::turn::ALPN, turn.clone())
             .spawn();
+        turn.set_endpoint(endpoint.clone());
 
         let net = Arc::new(Self {
             endpoint,
