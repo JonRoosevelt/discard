@@ -355,4 +355,9 @@ onReconnect(() => {
   if (app.currentChannelId != null) {
     ws.send({ op: 'subscribe', channel_id: app.currentChannelId })
   }
+  const selfId = app.identity?.public_id
+  for (const p of app.voice) {
+    const me = p.members.find((m) => m.user.id === selfId)
+    if (me) ws.send({ op: 'voice_join', channel_id: p.channel_id, muted: me.muted, video: me.video })
+  }
 })

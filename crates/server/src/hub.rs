@@ -48,6 +48,10 @@ impl Hub {
         });
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.conns.is_empty()
+    }
+
     pub fn subscribe(&self, conn: ConnId, channel_id: Id) {
         if let Some(mut c) = self.conns.get_mut(&conn) {
             c.channels.insert(channel_id.clone());

@@ -15,6 +15,7 @@ let attempt = 0
 let manual = false
 let queue: ClientEvent[] = []
 let current: WsStatus = 'offline'
+let pingTimer: ReturnType<typeof setInterval> | null = null
 
 function url(t: string): string {
   return `${location.origin.replace(/^http/, 'ws')}/ws?token=${encodeURIComponent(t)}`
@@ -65,6 +66,8 @@ function open(): void {
         queue.push(ev)
       }
     }
+    if (pingTimer) clearInterval(pingTimer)
+    pingTimer = setInterval(() => send({ op: 'ping' }), 20000)
     openHandlers.forEach((h) => h())
   }
 
@@ -80,7 +83,11 @@ function open(): void {
   }
 
   s.onclose = () => {
-    if (socket === s) socket = null
+    if (socket === s) {
+      socket = null
+      if (pingTimer) clearInterval(pingTimer)
+      pingTimer = null
+    }
     setStatus('offline')
     if (!manual) scheduleReconnect()
   }

@@ -16,6 +16,8 @@ use crate::iroh_net::{IrohNet, Wire, OP_TIMEOUT};
 use crate::state::AppState;
 use crate::voice::Envelope;
 
+const VOICE_REJOIN_GRACE: Duration = Duration::from_secs(15);
+
 async fn owner_bootstrap(state: &AppState, net: &IrohNet, workspace_id: &Id) -> Vec<iroh::EndpointId> {
     let Some(record) = state.store.record(workspace_id).await else {
         return Vec::new();
@@ -121,10 +123,18 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
     }
 
-    for channel_id in joined_voice {
-        leave_voice(&state, &channel_id).await;
-    }
     state.hub.unregister(conn);
+    if !joined_voice.is_empty() {
+        tokio::spawn(async move {
+            tokio::time::sleep(VOICE_REJOIN_GRACE).await;
+            // Any live socket is assumed to be the UI reconnected and re-sending voice_join.
+            if state.hub.is_empty() {
+                for channel_id in joined_voice {
+                    leave_voice(&state, &channel_id).await;
+                }
+            }
+        });
+    }
 }
 
 async fn handle_client_event(
