@@ -70,6 +70,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -79,5 +84,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          awk -v head="## [${GITHUB_REF_NAME#v}]" \
+            'index($0, head) == 1 { found = 1; next } found && /^## \[/ { exit } found' \
+            CHANGELOG.md > notes.md || true
+          if grep -q '[^[:space:]]' notes.md; then
+            notes=(--notes-file notes.md)
+          else
+            notes=(--generate-notes)
+          fi
           gh release create "$GITHUB_REF_NAME" dist/*.dmg dist/*.tar.gz \
-            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+            --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" "${notes[@]}"
