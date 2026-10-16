@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import { app } from '../lib/state.svelte'
   import { ws } from '../lib/ws'
   import { VoiceSession } from '../lib/rtc'
@@ -12,6 +13,8 @@
   let deafened = $state(false)
   let camOn = $state(false)
   let screenOn = $state(false)
+
+  onDestroy(() => session?.leave())
 
   let selfId = $derived(app.identity?.public_id ?? '')
 
