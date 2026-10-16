@@ -3,6 +3,7 @@
   import { app } from '../lib/state.svelte'
   import { ws } from '../lib/ws'
   import { VoiceSession } from '../lib/rtc'
+  import { playCue } from '../lib/cues'
   import VideoTile from './VideoTile.svelte'
   import Soundboard from './Soundboard.svelte'
   import type { Channel, Id } from '../lib/protocol'
@@ -36,6 +37,8 @@
   let screenOn = $state(false)
   let spotlight = $state<Id | null>(null)
   let showBoard = $state(false)
+  let knownChannel: Id | null = null
+  let knownOthers = new Set<Id>()
 
   onDestroy(() => session?.leave())
 
@@ -175,6 +178,22 @@
       screenOn = active.screen
       update()
     }
+  })
+
+  $effect(() => {
+    const channel = myPresence?.channel_id ?? null
+    const ids = new Set(others.map((m) => m.user.id))
+    if (channel !== knownChannel) {
+      knownChannel = channel
+      knownOthers = ids
+      return
+    }
+    const joined = [...ids].some((id) => !knownOthers.has(id))
+    const left = [...knownOthers].some((id) => !ids.has(id))
+    knownOthers = ids
+    if (deafened) return
+    if (joined) playCue('join')
+    else if (left) playCue('leave')
   })
 
   function update(): void {
