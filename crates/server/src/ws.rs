@@ -262,7 +262,7 @@ async fn handle_client_event(
             joined_voice.remove(&channel_id);
             leave_voice(state, &channel_id).await;
         }
-        ClientEvent::Signal { to, data } => {
+        ClientEvent::Signal { to, data, session } => {
             state.turn.add_peer(&to);
             let Some(channel_id) = state.voice.active_voice_channel() else {
                 state.hub.send_to_conn(
@@ -278,6 +278,7 @@ async fn handle_client_event(
                 to,
                 from: state.identity.public_id(),
                 data,
+                session,
             };
             broadcast_envelope(state, &channel_id, envelope).await;
         }
@@ -659,10 +660,10 @@ async fn handle_voice(state: &AppState, workspace_id: &Id, envelope: Envelope) {
                     .broadcast_all(ServerEvent::VoicePresence { presence });
             }
         }
-        Envelope::Signal { to, from, data, .. } => {
+        Envelope::Signal { to, from, data, session, .. } => {
             if to == state.identity.public_id() {
                 state.turn.add_peer(&from);
-                state.hub.broadcast_all(ServerEvent::Signal { from, data });
+                state.hub.broadcast_all(ServerEvent::Signal { from, data, session });
             }
         }
         Envelope::Sound { sound_id, by, .. } => {

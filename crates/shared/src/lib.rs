@@ -145,6 +145,7 @@ pub enum SignalData {
         #[serde(default)]
         sdp_mline_index: Option<u16>,
     },
+    Hello,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,7 +158,12 @@ pub enum ClientEvent {
     VoiceJoin { channel_id: Id, muted: bool, video: bool },
     VoiceUpdate { muted: bool, deafened: bool, video: bool, screen: bool },
     VoiceLeave { channel_id: Id },
-    Signal { to: Id, data: SignalData },
+    Signal {
+        to: Id,
+        data: SignalData,
+        #[serde(default)]
+        session: Option<String>,
+    },
     SoundPlay { channel_id: Id, sound_id: String },
     Ping,
 }
@@ -179,7 +185,11 @@ pub enum ServerEvent {
     VoiceJoined { presence: VoicePresence },
     VoiceLeft { channel_id: Id, workspace_id: Id, user_id: Id },
     VoiceUpdated { channel_id: Id, member: VoiceMember },
-    Signal { from: Id, data: SignalData },
+    Signal {
+        from: Id,
+        data: SignalData,
+        session: Option<String>,
+    },
     SoundPlay { channel_id: Id, sound_id: String, by: Id },
     Error { message: String },
     Pong,

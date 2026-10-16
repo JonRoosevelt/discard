@@ -104,6 +104,7 @@ export type SignalData =
   | { kind: 'offer'; sdp: string }
   | { kind: 'answer'; sdp: string }
   | { kind: 'ice'; candidate: string; sdp_mid?: string | null; sdp_mline_index?: number | null }
+  | { kind: 'hello' }
 
 export type ClientEvent =
   | { op: 'subscribe'; channel_id: Id }
@@ -113,7 +114,7 @@ export type ClientEvent =
   | { op: 'voice_join'; channel_id: Id; muted: boolean; video: boolean }
   | { op: 'voice_update'; muted: boolean; deafened: boolean; video: boolean; screen: boolean }
   | { op: 'voice_leave'; channel_id: Id }
-  | { op: 'signal'; to: Id; data: SignalData }
+  | { op: 'signal'; to: Id; data: SignalData; session?: string }
   | { op: 'sound_play'; channel_id: Id; sound_id: string }
   | { op: 'ping' }
 
@@ -132,7 +133,7 @@ export type ServerEvent =
   | { op: 'voice_joined'; presence: VoicePresence }
   | { op: 'voice_left'; channel_id: Id; workspace_id: Id; user_id: Id }
   | { op: 'voice_updated'; channel_id: Id; member: VoiceMember }
-  | { op: 'signal'; from: Id; data: SignalData }
+  | { op: 'signal'; from: Id; data: SignalData; session?: string | null }
   | { op: 'sound_play'; channel_id: Id; sound_id: string; by: Id }
   | { op: 'error'; message: string }
   | { op: 'pong' }

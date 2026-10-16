@@ -37,6 +37,8 @@ pub enum Envelope {
         to: Id,
         from: Id,
         data: SignalData,
+        #[serde(default)]
+        session: Option<String>,
     },
     Sound {
         channel_id: Id,

@@ -55,6 +55,7 @@ interface Peer {
 
 export class VoiceSession {
   readonly selfId: Id
+  readonly session = Math.random().toString(36).slice(2)
   channelId: Id | null = null
   localStream: MediaStream | null = null
   screenStream: MediaStream | null = null
@@ -68,6 +69,7 @@ export class VoiceSession {
 
   private readonly onChange?: (session: VoiceSession) => void
   private readonly pcs = new Map<Id, Peer>()
+  private readonly remoteSessions = new Map<Id, string>()
   private unsubscribe: (() => void) | null = null
   private micTrack: MediaStreamTrack | null = null
   private videoTrack: MediaStreamTrack | null = null
@@ -102,7 +104,10 @@ export class VoiceSession {
     }
     if (this.closed) return
     this.notify()
-    for (const id of peerIds) this.ensureOffer(id)
+    for (const id of peerIds) {
+      this.ensureOffer(id)
+      if (id < this.selfId) this.sendSignal(id, { kind: 'hello' })
+    }
   }
 
   leave(): void {
@@ -119,6 +124,7 @@ export class VoiceSession {
       }
     }
     this.pcs.clear()
+    this.remoteSessions.clear()
     this.peers.clear()
     if (this.micTrack) {
       this.micTrack.stop()
@@ -237,7 +243,7 @@ export class VoiceSession {
   private handle(ev: ServerEvent): void {
     switch (ev.op) {
       case 'signal':
-        void this.onSignal(ev.from, ev.data)
+        void this.onSignal(ev.from, ev.data, ev.session)
         break
       case 'voice_updated':
         if (ev.channel_id === this.channelId) this.setMember(ev.member)
@@ -386,8 +392,18 @@ export class VoiceSession {
     }
   }
 
-  private async onSignal(from: Id, data: SignalData): Promise<void> {
+  private async onSignal(from: Id, data: SignalData, session?: string | null): Promise<void> {
     if (this.closed || from === this.selfId) return
+    if (session) {
+      const known = this.remoteSessions.get(from)
+      this.remoteSessions.set(from, session)
+      if (known === session && data.kind === 'hello') return
+      if (known !== session && (known != null || data.kind === 'hello')) this.closePeer(from)
+    }
+    if (data.kind === 'hello') {
+      if (this.selfId < from) void this.startOffer(from)
+      return
+    }
     if (data.kind !== 'ice') console.log('[rtc] signal in', data.kind, 'from', from.slice(0, 8))
     let peer = this.pcs.get(from)
     if (!peer) {
@@ -479,6 +495,17 @@ export class VoiceSession {
     this.connected = value
   }
 
+  private closePeer(id: Id): void {
+    try {
+      this.pcs.get(id)?.pc.close()
+    } catch {
+      void 0
+    }
+    this.pcs.delete(id)
+    this.updateConnected()
+    this.notify()
+  }
+
   private drop(id: Id): void {
     const peer = this.pcs.get(id)
     if (peer) {
@@ -495,7 +522,7 @@ export class VoiceSession {
   }
 
   private sendSignal(to: Id, data: SignalData): void {
-    ws.send({ op: 'signal', to, data })
+    ws.send({ op: 'signal', to, data, session: this.session })
   }
 
   private notify(): void {
