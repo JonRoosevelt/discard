@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="Discard"
 APP_ID="app.discard.desktop"
-VERSION="0.1.0"
+VERSION="${VERSION:-0.1.0}"
 APP_DIR="dist/macos/${APP_NAME}.app"
 DMG="dist/${APP_NAME}-${VERSION}-macos.dmg"
 
