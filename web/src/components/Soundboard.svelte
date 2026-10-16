@@ -17,8 +17,6 @@
   let editName = $state('')
   let editEmoji = $state('')
 
-  const mine = (sound: Sound): boolean => !sound.builtin && sound.owner === app.identity?.public_id
-
   let myChannelId = $derived.by(() => {
     const me = app.identity?.public_id
     if (!me) return null
@@ -137,7 +135,7 @@
         >
           {sound.emoji || '🔊'}
         </button>
-        {#if mine(sound)}
+        {#if !sound.builtin}
           <div class="actions">
             <button
               type="button"

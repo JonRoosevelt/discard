@@ -6,7 +6,7 @@ use shared::Sound;
 
 use crate::error::{AppError, AppResult};
 use crate::media::sniff_content_type;
-use crate::sounds::{Denied, MAX_BYTES};
+use crate::sounds::MAX_BYTES;
 use crate::state::AppState;
 use crate::ws;
 
@@ -106,17 +106,17 @@ pub async fn create(
         builtin: false,
         owner: state.identity.public_id(),
         hash,
+        version: 1,
+        editor: state.identity.public_id(),
+        deleted: false,
     };
     state.sounds.merge(sound.clone()).await;
     ws::announce_sound(&state, &sound).await;
     Ok(Json(sound))
 }
 
-fn denied(d: Denied) -> AppError {
-    match d {
-        Denied::NotFound => AppError::NotFound("sound not found".to_string()),
-        Denied::NotOwner => AppError::Forbidden("only the owner can change this sound".to_string()),
-    }
+fn not_found() -> AppError {
+    AppError::NotFound("sound not found".to_string())
 }
 
 pub async fn update(
@@ -129,7 +129,7 @@ pub async fn update(
         .sounds
         .edit(&id, &state.identity.public_id(), name, emoji)
         .await
-        .map_err(denied)?;
+        .ok_or_else(not_found)?;
     ws::announce_sound(&state, &sound).await;
     Ok(Json(sound))
 }
@@ -138,12 +138,12 @@ pub async fn delete(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> AppResult<StatusCode> {
-    let me = state.identity.public_id();
-    let sound = state.sounds.get(&id).await.ok_or_else(|| denied(Denied::NotFound))?;
-    if sound.owner != me {
-        return Err(denied(Denied::NotOwner));
-    }
-    state.sounds.remove(&id, &me).await;
-    ws::announce_sound_delete(&state, &id, &me).await;
+    let sound = state
+        .sounds
+        .delete(&id, &state.identity.public_id())
+        .await
+        .ok_or_else(not_found)?;
+    ws::untag_unused(&state, &sound.hash).await;
+    ws::announce_sound(&state, &sound).await;
     Ok(StatusCode::NO_CONTENT)
 }

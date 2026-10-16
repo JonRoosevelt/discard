@@ -44,7 +44,6 @@ enum Frame {
     Env { id: String, envelope: Envelope },
     Ack { id: String },
     SoundSet { id: String, from: Id, sound: Sound },
-    SoundDel { id: String, sound_id: String, owner: Id },
 }
 
 pub async fn handler(
@@ -313,7 +312,7 @@ async fn handle_client_event(
                 channel_id: channel_id.clone(),
                 sound_id: sound_id.clone(),
                 by: by.clone(),
-                sound: state.sounds.get(&sound_id).await,
+                sound: state.sounds.get(&sound_id).await.filter(|s| !s.deleted),
             };
             broadcast_envelope(state, &channel_id, envelope).await;
             state.hub.broadcast_all(ServerEvent::SoundPlay {
@@ -583,12 +582,6 @@ async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Ve
                 ingest_sound(state, &from, sound).await;
             }
         }
-        Frame::SoundDel { id, sound_id, owner } => {
-            send_ack(state, workspace_id, &id).await;
-            if net.mark_seen(&id) && state.sounds.remove(&sound_id, &owner).await {
-                broadcast_sounds(state).await;
-            }
-        }
     }
 }
 
@@ -601,20 +594,35 @@ async fn broadcast_sounds(state: &AppState) {
 async fn ingest_sound(state: &AppState, from: &Id, mut sound: Sound) {
     sound.builtin = false;
     sound.url = format!("/files/{}", sound.hash);
-    if !sounds::valid(&sound) || state.sounds.get(&sound.id).await.as_ref() == Some(&sound) {
+    if !sounds::valid(&sound) {
         return;
+    }
+    if let Some(local) = state.sounds.get(&sound.id).await {
+        if (sound.version, &sound.editor) <= (local.version, &local.editor) {
+            return;
+        }
     }
     let net = state.net().await;
-    let Some(peer) = net.parse_peer(from) else {
-        return;
-    };
-    if let Err(e) = net.download_capped(&sound.hash, peer, sounds::MAX_BYTES as u64).await {
-        tracing::debug!("sound download failed: {e}");
-        return;
+    if !sound.deleted {
+        let Some(peer) = net.parse_peer(from) else {
+            return;
+        };
+        if let Err(e) = net.download_capped(&sound.hash, peer, sounds::MAX_BYTES as u64).await {
+            tracing::debug!("sound download failed: {e}");
+            return;
+        }
+        let _ = net.tag_blob(&sound.hash).await;
     }
-    let _ = net.tag_blob(&sound.hash).await;
+    let hash = sound.hash.clone();
     if state.sounds.merge(sound).await {
+        untag_unused(state, &hash).await;
         broadcast_sounds(state).await;
+    }
+}
+
+pub async fn untag_unused(state: &AppState, hash: &str) {
+    if !state.sounds.hash_in_use(hash).await {
+        let _ = state.net().await.delete_blob_tag(hash.as_bytes().to_vec()).await;
     }
 }
 
@@ -646,20 +654,8 @@ pub async fn announce_sound(state: &AppState, sound: &Sound) {
 }
 
 async fn announce_sounds(state: &AppState, workspace_id: &Id) {
-    for sound in state.sounds.uploads().await {
+    for sound in state.sounds.all().await {
         announce_sound_in(state, workspace_id, &sound).await;
-    }
-}
-
-pub async fn announce_sound_delete(state: &AppState, sound_id: &str, owner: &Id) {
-    for workspace in state.store.list().await {
-        let id = hex::encode(rand::random::<[u8; 8]>());
-        let frame = Frame::SoundDel {
-            id: id.clone(),
-            sound_id: sound_id.to_string(),
-            owner: owner.clone(),
-        };
-        broadcast_frame(state, &workspace.id, frame, id).await;
     }
 }
 

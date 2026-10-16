@@ -25,6 +25,9 @@ pub fn builtin() -> Vec<Sound> {
             builtin: true,
             owner: String::new(),
             hash: String::new(),
+            version: 0,
+            editor: String::new(),
+            deleted: false,
         })
         .collect()
 }
@@ -53,29 +56,18 @@ struct Db {
 impl Db {
     fn merge(&mut self, sound: Sound) -> bool {
         if let Some(existing) = self.sounds.iter_mut().find(|s| s.id == sound.id) {
-            if existing.owner != sound.owner || *existing == sound {
+            if (sound.version, &sound.editor) <= (existing.version, &existing.editor) {
                 return false;
             }
             *existing = sound;
             return true;
         }
-        if self.sounds.len() >= MAX_SOUNDS {
+        if !sound.deleted && self.sounds.iter().filter(|s| !s.deleted).count() >= MAX_SOUNDS {
             return false;
         }
         self.sounds.push(sound);
         true
     }
-
-    fn remove(&mut self, id: &str, owner: &str) -> bool {
-        let before = self.sounds.len();
-        self.sounds.retain(|s| !(s.id == id && s.owner == owner));
-        self.sounds.len() != before
-    }
-}
-
-pub enum Denied {
-    NotFound,
-    NotOwner,
 }
 
 pub struct SoundStore {
@@ -111,14 +103,18 @@ impl SoundStore {
         }
     }
 
-    pub async fn uploads(&self) -> Vec<Sound> {
+    pub async fn all(&self) -> Vec<Sound> {
         self.db.lock().await.sounds.clone()
     }
 
     pub async fn list(&self) -> Vec<Sound> {
         let mut sounds = builtin();
-        sounds.extend(self.uploads().await);
+        sounds.extend(self.all().await.into_iter().filter(|s| !s.deleted));
         sounds
+    }
+
+    pub async fn hash_in_use(&self, hash: &str) -> bool {
+        self.db.lock().await.sounds.iter().any(|s| !s.deleted && s.hash == hash)
     }
 
     pub async fn get(&self, id: &str) -> Option<Sound> {
@@ -134,24 +130,27 @@ impl SoundStore {
         changed
     }
 
-    pub async fn remove(&self, id: &str, owner: &str) -> bool {
-        let mut db = self.db.lock().await;
-        let changed = db.remove(id, owner);
-        if changed {
-            Self::persist(&self.path, &db);
-        }
-        changed
+    pub async fn edit(&self, id: &str, me: &str, name: String, emoji: String) -> Option<Sound> {
+        self.bump(id, me, |s| {
+            s.name = name;
+            s.emoji = emoji;
+        })
+        .await
     }
 
-    pub async fn edit(&self, id: &str, me: &str, name: String, emoji: String) -> Result<Sound, Denied> {
-        let mut sound = self.get(id).await.ok_or(Denied::NotFound)?;
-        if sound.owner != me {
-            return Err(Denied::NotOwner);
-        }
-        sound.name = name;
-        sound.emoji = emoji;
-        self.merge(sound.clone()).await;
-        Ok(sound)
+    pub async fn delete(&self, id: &str, me: &str) -> Option<Sound> {
+        self.bump(id, me, |s| s.deleted = true).await
+    }
+
+    async fn bump(&self, id: &str, me: &str, f: impl FnOnce(&mut Sound)) -> Option<Sound> {
+        let mut db = self.db.lock().await;
+        let mut sound = db.sounds.iter().find(|s| s.id == id && !s.deleted)?.clone();
+        f(&mut sound);
+        sound.version += 1;
+        sound.editor = me.to_string();
+        db.merge(sound.clone());
+        Self::persist(&self.path, &db);
+        Some(sound)
     }
 }
 
@@ -159,37 +158,50 @@ impl SoundStore {
 mod tests {
     use super::*;
 
-    fn sound(id: &str, owner: &str, name: &str) -> Sound {
+    fn sound(id: &str, editor: &str, version: u64, name: &str) -> Sound {
         Sound {
             id: id.into(),
             name: name.into(),
             url: String::new(),
             emoji: String::new(),
             builtin: false,
-            owner: owner.into(),
+            owner: "alice".into(),
             hash: "a".repeat(64),
+            version,
+            editor: editor.into(),
+            deleted: false,
         }
     }
 
     #[test]
-    fn only_owner_can_change_or_remove() {
+    fn last_writer_wins() {
         let mut db = Db::default();
-        assert!(db.merge(sound("1", "alice", "boom")));
-        assert!(!db.merge(sound("1", "bob", "hijack")));
-        assert!(!db.merge(sound("1", "alice", "boom")));
-        assert!(db.merge(sound("1", "alice", "renamed")));
-        assert_eq!(db.sounds[0].name, "renamed");
-        assert!(!db.remove("1", "bob"));
-        assert!(db.remove("1", "alice"));
-        assert!(db.sounds.is_empty());
+        assert!(db.merge(sound("1", "alice", 1, "v1")));
+        assert!(db.merge(sound("1", "bob", 2, "newer")));
+        assert!(!db.merge(sound("1", "alice", 1, "older")));
+        assert!(!db.merge(sound("1", "bob", 2, "newer")));
+        assert!(db.merge(sound("1", "carol", 2, "tie-break")));
+        assert!(!db.merge(sound("1", "bob", 2, "loses tie")));
+        assert_eq!(db.sounds[0].name, "tie-break");
+    }
+
+    #[test]
+    fn tombstone_blocks_resurrection() {
+        let mut db = Db::default();
+        assert!(db.merge(sound("1", "alice", 1, "x")));
+        let mut dead = sound("1", "bob", 2, "x");
+        dead.deleted = true;
+        assert!(db.merge(dead));
+        assert!(!db.merge(sound("1", "alice", 1, "x")));
+        assert!(db.sounds[0].deleted);
     }
 
     #[test]
     fn rejects_bad_metadata() {
-        assert!(valid(&sound("1", "alice", "ok")));
-        assert!(!valid(&sound("pop", "alice", "ok")));
-        assert!(!valid(&sound("1", "alice", " ")));
-        let mut s = sound("1", "alice", "ok");
+        assert!(valid(&sound("1", "alice", 0, "ok")));
+        assert!(!valid(&sound("pop", "alice", 0, "ok")));
+        assert!(!valid(&sound("1", "alice", 0, " ")));
+        let mut s = sound("1", "alice", 0, "ok");
         s.hash = "zz".into();
         assert!(!valid(&s));
     }

@@ -77,6 +77,12 @@ pub struct Sound {
     pub owner: String,
     #[serde(default)]
     pub hash: String,
+    #[serde(default)]
+    pub version: u64,
+    #[serde(default)]
+    pub editor: String,
+    #[serde(default)]
+    pub deleted: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
