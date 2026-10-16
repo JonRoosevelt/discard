@@ -44,8 +44,11 @@ enum Frame {
     Ack { id: String },
 }
 
-fn signed_frame(state: &AppState, id: String, payload: &Payload) -> Option<Vec<u8>> {
-    let signed = Signed::new(&state.identity.secret_key(), id, payload)?;
+pub fn signed_frame(state: &AppState, id: String, payload: &Payload) -> Option<Vec<u8>> {
+    encode_frame(Signed::new(&state.identity.secret_key(), id, payload)?)
+}
+
+pub fn encode_frame(signed: Signed) -> Option<Vec<u8>> {
     serde_json::to_vec(&Frame::Signed(signed)).ok()
 }
 
@@ -326,7 +329,7 @@ async fn handle_client_event(
     }
 }
 
-async fn leave_voice(state: &AppState, channel_id: &Id) {
+pub async fn leave_voice(state: &AppState, channel_id: &Id) {
     let user_id = state.identity.public_id();
     let Some(workspace_id) = state.voice.leave(channel_id, &user_id) else {
         return;
@@ -517,12 +520,16 @@ fn spawn_workspace_receiver(
             tracing::debug!("gossip join timed out for workspace {workspace_id}");
         }
         loop {
+            if state.store.record(&workspace_id).await.is_none() {
+                break;
+            }
             match tokio::time::timeout(Duration::from_secs(120), receiver.next()).await {
                 Ok(Some(Ok(Event::Received(msg)))) => {
                     handle_workspace_payload(&state, &workspace_id, msg.content.to_vec()).await;
                 }
                 Ok(Some(Ok(Event::NeighborUp(peer)))) => {
                     state.store.add_peer(&workspace_id, &peer.to_string()).await;
+                    crate::meta::relay(&state, &workspace_id, None).await;
                 }
                 Ok(Some(Ok(_))) => {}
                 Ok(Some(Err(e))) => {
@@ -548,7 +555,7 @@ async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Ve
         Frame::Ack { id } => return net.ack(&id),
         Frame::Signed(signed) => signed,
     };
-    let Some((signer, payload)) = signed.open() else {
+    let Some((signer, payload)) = signed.open::<Payload>() else {
         tracing::debug!("dropping frame {} with a bad signature", signed.id);
         return;
     };
@@ -572,6 +579,9 @@ async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Ve
             if let Some(envelope) = signed::authorize(envelope, &signer) {
                 handle_voice(state, workspace_id, envelope).await;
             }
+        }
+        Payload::Op { op } => {
+            crate::meta::apply(state, workspace_id, signer, op, signed).await;
         }
     }
 }

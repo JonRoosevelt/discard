@@ -29,13 +29,24 @@ pub fn router(state: AppState) -> Router {
         .route("/identity/import", post(identity::import))
         .route("/workspaces", get(workspaces::list).post(workspaces::create))
         .route("/workspaces/join", post(workspaces::join))
-        .route("/workspaces/{id}", get(workspaces::get))
+        .route(
+            "/workspaces/{id}",
+            get(workspaces::get)
+                .patch(workspaces::update)
+                .delete(workspaces::delete),
+        )
         .route("/workspaces/{id}/ticket", get(workspaces::ticket))
+        .route("/workspaces/{id}/leave", post(workspaces::leave))
         .route(
             "/workspaces/{id}/channels",
             post(workspaces::create_channel),
         )
-        .route("/channels/{id}", get(channels::get))
+        .route(
+            "/channels/{id}",
+            get(channels::get)
+                .patch(channels::update)
+                .delete(channels::delete),
+        )
         .route(
             "/channels/{id}/messages",
             get(messages::list).post(messages::create),

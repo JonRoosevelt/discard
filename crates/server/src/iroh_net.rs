@@ -372,7 +372,7 @@ impl IrohNet {
 
 // Plumtree dedups by content hash for 90s, so an identical retransmit never reaches a peer that
 // already got the frame and lost our ack; varying the bytes makes it re-ack.
-fn with_attempt(bytes: &[u8], attempt: u32) -> Vec<u8> {
+pub fn with_attempt(bytes: &[u8], attempt: u32) -> Vec<u8> {
     match serde_json::from_slice::<serde_json::Value>(bytes) {
         Ok(serde_json::Value::Object(mut map)) => {
             map.insert("r".into(), attempt.into());

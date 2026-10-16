@@ -7,6 +7,7 @@ mod hub;
 mod identity;
 mod iroh_net;
 mod media;
+mod meta;
 mod retention;
 mod routes;
 mod signed;
@@ -101,6 +102,15 @@ async fn main() -> anyhow::Result<()> {
         loop {
             ticker.tick().await;
             ws::voice_tick(&voice_state).await;
+        }
+    });
+
+    let meta_state = state.clone();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            ticker.tick().await;
+            meta::tick(&meta_state).await;
         }
     });
 

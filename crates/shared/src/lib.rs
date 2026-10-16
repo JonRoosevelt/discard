@@ -122,6 +122,11 @@ pub struct CreateChannelRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenameRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendMessageRequest {
     pub content: String,
     #[serde(default)]
@@ -195,6 +200,8 @@ pub enum ServerEvent {
     SoundPlay { channel_id: Id, sound_id: String, by: Id },
     Error { message: String },
     Pong,
+    WorkspaceUpdated { workspace: Workspace },
+    WorkspaceRemoved { workspace_id: Id },
 }
 
 impl ClientEvent {

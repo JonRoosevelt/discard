@@ -1,7 +1,9 @@
 use iroh::{PublicKey, SecretKey, Signature};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use shared::{Id, Message};
 
+use crate::meta::Op;
 use crate::voice::Envelope;
 
 const DOMAIN: &[u8] = b"discard-signed-frame-v1\0";
@@ -11,6 +13,7 @@ const DOMAIN: &[u8] = b"discard-signed-frame-v1\0";
 pub enum Payload {
     Msg { message: Message },
     Env { envelope: Envelope },
+    Op { op: Op },
 }
 
 // The payload travels as a JSON string so the signature covers the exact bytes the author
@@ -28,7 +31,7 @@ fn signing_input(id: &str, body: &str) -> Vec<u8> {
 }
 
 impl Signed {
-    pub fn new(key: &SecretKey, id: String, payload: &Payload) -> Option<Self> {
+    pub fn new<T: Serialize>(key: &SecretKey, id: String, payload: &T) -> Option<Self> {
         let body = serde_json::to_string(payload).ok()?;
         let sig = key.sign(&signing_input(&id, &body));
         Some(Self {
@@ -39,7 +42,7 @@ impl Signed {
         })
     }
 
-    pub fn open(&self) -> Option<(Id, Payload)> {
+    pub fn open<T: DeserializeOwned>(&self) -> Option<(Id, T)> {
         let signer: PublicKey = self.signer.parse().ok()?;
         let sig = Signature::try_from(hex::decode(&self.sig).ok()?.as_slice()).ok()?;
         signer.verify(&signing_input(&self.id, &self.body), &sig).ok()?;
@@ -97,24 +100,24 @@ mod tests {
         let alice_id = alice.public().to_string();
 
         let good = Signed::new(&alice, "1".into(), &signal(&alice_id)).unwrap();
-        let (signer, payload) = good.open().expect("valid signature");
+        let (signer, payload) = good.open::<Payload>().expect("valid signature");
         assert_eq!(signer, alice_id);
         let Payload::Env { envelope } = payload else { panic!() };
         assert!(authorize(envelope, &signer).is_some());
 
         let mut tampered = good.clone();
         tampered.body = tampered.body.replace("hello", "offer");
-        assert!(tampered.open().is_none());
+        assert!(tampered.open::<Payload>().is_none());
         let mut reid = good.clone();
         reid.id = "2".into();
-        assert!(reid.open().is_none());
+        assert!(reid.open::<Payload>().is_none());
 
         let mut claimed = good.clone();
         claimed.signer = bob.public().to_string();
-        assert!(claimed.open().is_none());
+        assert!(claimed.open::<Payload>().is_none());
 
         let spoof = Signed::new(&bob, "3".into(), &signal(&alice_id)).unwrap();
-        let (signer, payload) = spoof.open().expect("bob's own signature is valid");
+        let (signer, payload) = spoof.open::<Payload>().expect("bob's own signature is valid");
         let Payload::Env { envelope } = payload else { panic!() };
         assert!(authorize(envelope, &signer).is_none());
     }
