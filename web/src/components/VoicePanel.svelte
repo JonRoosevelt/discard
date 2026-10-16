@@ -23,6 +23,7 @@
     deafened: boolean
     hasVideo: boolean
     conn: string
+    watchers: string[]
   }
 
   const SELF = 'self'
@@ -87,6 +88,12 @@
     return !!localPreview && localPreview.getVideoTracks().length > 0
   })
 
+  let watchers = $derived.by(() => {
+    void tick
+    const ids = session?.viewers ?? new Set<Id>()
+    return others.filter((m) => ids.has(m.user.id)).map((m) => m.user.display_name)
+  })
+
   let views = $derived.by((): TileView[] => [
     {
       key: SELF,
@@ -99,6 +106,7 @@
       deafened: false,
       hasVideo: localHasVideo,
       conn: '',
+      watchers,
     },
     ...tiles.map((tile) => ({
       key: tile.member.user.id,
@@ -111,6 +119,7 @@
       deafened,
       hasVideo: tile.hasVideo,
       conn: tile.conn,
+      watchers: [],
     })),
   ])
 
@@ -155,6 +164,9 @@
       onChange: () => {
         tick += 1
       },
+      onViewer: () => {
+        if (!deafened) playCue('viewing')
+      },
     })
     session = next
     micOn = !muted
@@ -194,6 +206,10 @@
     if (deafened) return
     if (joined) playCue('join')
     else if (left) playCue('leave')
+  })
+
+  $effect(() => {
+    session?.setViewing(focused && !focused.local && focused.screen ? focused.key : null)
   })
 
   function update(): void {
@@ -268,6 +284,7 @@
     deafened={view.deafened}
     hasVideo={view.hasVideo}
     conn={view.conn}
+    watchers={view.watchers}
     spotlit={focused?.key === view.key}
     {compact}
     onselect={() => select(view.key)}
