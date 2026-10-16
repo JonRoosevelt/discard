@@ -134,7 +134,9 @@ async fn main() -> anyhow::Result<()> {
     }
     // Closing the endpoint tells peers we left; otherwise they hold the dead connection until it
     // idles out and ignore our gossip rejoin after a quick restart.
-    shutdown_state.net().await.shutdown().await;
+    let net = shutdown_state.net().await;
+    let _ = tokio::time::timeout(Duration::from_secs(5), net.shutdown()).await;
+    update::relaunch_if_pending();
     Ok(())
 }
 
@@ -144,6 +146,7 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {}
         _ = term.recv() => {}
+        _ = update::SHUTDOWN.notified() => {}
     }
 }
 

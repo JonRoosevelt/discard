@@ -60,6 +60,8 @@ struct Cached {
 
 static CACHE: Mutex<Option<Cached>> = Mutex::new(None);
 static STATUS: Mutex<Status> = Mutex::new(Status::Idle);
+static RELAUNCH: Mutex<Option<Target>> = Mutex::new(None);
+pub static SHUTDOWN: tokio::sync::Notify = tokio::sync::Notify::const_new();
 
 fn set_status(s: Status) {
     *STATUS.lock().unwrap() = s;
@@ -287,6 +289,12 @@ async fn install_linux(archive: &Path, stem: &str, work: &Path, exe: &Path) -> R
     Ok(())
 }
 
+pub fn relaunch_if_pending() {
+    if let Some(target) = RELAUNCH.lock().unwrap().take() {
+        relaunch(&target);
+    }
+}
+
 fn relaunch(target: &Target) {
     if cfg!(debug_assertions) && std::env::var_os("DISCARD_UPDATE_NO_RELAUNCH").is_some() {
         return;
@@ -392,9 +400,11 @@ pub async fn install(State(state): State<AppState>) -> AppResult<(StatusCode, Js
         match result {
             Ok(()) => {
                 set_status(Status::Restarting);
-                relaunch(&target);
                 tokio::time::sleep(Duration::from_millis(800)).await;
-                std::process::exit(0);
+                // main closes the iroh endpoint before relaunching so peers drop our old
+                // connection and accept the new process's gossip rejoin right away.
+                *RELAUNCH.lock().unwrap() = Some(target);
+                SHUTDOWN.notify_one();
             }
             Err(e) => {
                 tracing::warn!("update failed: {e:#}");
