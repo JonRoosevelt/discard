@@ -124,6 +124,7 @@ export type ServerEvent =
       workspaces: Workspace[]
       voice: VoicePresence[]
       sounds: Sound[]
+      ice_servers: RTCIceServer[]
     }
   | { op: 'message'; message: Message }
   | { op: 'typing'; channel_id: Id; user: UserPublic }

@@ -1,6 +1,7 @@
 import { ws, onReconnect, onStatus } from './ws'
 import type { WsStatus } from './ws'
 import { decryptText, deriveKey, encryptText } from './crypto'
+import { setNodeIceServers } from './rtc'
 import {
   Identity,
   createChannel as apiCreateChannel,
@@ -160,6 +161,7 @@ function handleEvent(ev: ServerEvent): void {
         secret: w.secret ?? app.workspaces.find((o) => o.id === w.id)?.secret ?? null,
       }))
       app.sounds = ev.sounds
+      setNodeIceServers(ev.ice_servers)
       for (const w of ev.workspaces) if (w.secret) void loadKey(w)
       app.voice = ev.voice.filter(
         (v) => app.currentWorkspaceId == null || v.workspace_id === app.currentWorkspaceId,

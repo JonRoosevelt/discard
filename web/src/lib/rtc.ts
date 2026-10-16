@@ -20,7 +20,12 @@ function buildIceServers(): RTCIceServer[] {
     .map((urls) => ({ urls }))
 }
 
-export const ICE_SERVERS: RTCIceServer[] = buildIceServers()
+const ICE_SERVERS: RTCIceServer[] = buildIceServers()
+let nodeIceServers: RTCIceServer[] = []
+
+export function setNodeIceServers(servers: RTCIceServer[]): void {
+  nodeIceServers = servers
+}
 
 export interface PeerState {
   id: Id
@@ -295,7 +300,7 @@ export class VoiceSession {
   }
 
   private createPeer(id: Id): Peer {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+    const pc = new RTCPeerConnection({ iceServers: [...ICE_SERVERS, ...nodeIceServers] })
     const stream = new MediaStream()
     const peer: Peer = {
       id,
