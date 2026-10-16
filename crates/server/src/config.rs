@@ -6,6 +6,7 @@ pub struct Config {
     pub data_dir: PathBuf,
     pub offline: bool,
     pub no_relay: bool,
+    pub relay_only: bool,
     pub no_open: bool,
     pub iroh_bind: Option<std::net::SocketAddr>,
     pub token_override: Option<String>,
@@ -25,6 +26,7 @@ impl Config {
             .unwrap_or_else(|_| PathBuf::from("data"));
         let offline = env_bool("DISCARD_OFFLINE");
         let no_relay = env_bool("DISCARD_NO_RELAY");
+        let relay_only = env_bool("DISCARD_RELAY_ONLY");
         let no_open = env_bool("DISCARD_NO_OPEN");
         let iroh_bind = std::env::var("DISCARD_IROH_BIND")
             .ok()
@@ -35,6 +37,7 @@ impl Config {
             data_dir,
             offline,
             no_relay,
+            relay_only,
             no_open,
             iroh_bind,
             token_override,

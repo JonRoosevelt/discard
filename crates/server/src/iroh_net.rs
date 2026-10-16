@@ -56,6 +56,7 @@ impl IrohNet {
         secret_key: SecretKey,
         offline: bool,
         no_relay: bool,
+        relay_only: bool,
         bind_addr: Option<std::net::SocketAddr>,
         blobs_dir: &Path,
         turn: Arc<Turn>,
@@ -72,6 +73,9 @@ impl IrohNet {
             builder = builder
                 .bind_addr(addr)
                 .map_err(|e| anyhow::anyhow!("invalid iroh bind addr: {e}"))?;
+        }
+        if relay_only {
+            builder = builder.clear_ip_transports();
         }
         let endpoint = builder
             .address_lookup(lookup.clone())

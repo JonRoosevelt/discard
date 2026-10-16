@@ -45,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
         identity.secret_key(),
         config.offline,
         config.no_relay,
+        config.relay_only,
         config.iroh_bind,
         &config.blobs_dir(),
         turn.clone(),

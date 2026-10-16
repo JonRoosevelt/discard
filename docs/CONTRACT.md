@@ -101,8 +101,12 @@ prefix, the content is treated as plaintext (fallback/legacy). The node/database
 
 ## WebRTC Mesh (unchanged)
 
-The newcomer initiates offers; the others respond. Direct ICE (no TURN by default). Signaling: UI → local node →
-gossip → remote node → UI.
+The newcomer initiates offers; the others respond. Signaling: UI → local node → gossip → remote node → UI.
+
+ICE fallback: each node runs a TURN server on `127.0.0.1` (TCP, per-session credentials sent in WS `ready` as
+`ice_servers`). Relayed addresses are virtual (`100.64.0.0/10`, derived from the EndpointId) and the media is
+carried node-to-node as QUIC datagrams on ALPN `discard/media/1`, so it follows iroh's holepunch/relay path.
+ICE still prefers host/srflx pairs. `DISCARD_RELAY_ONLY=1` drops iroh's IP transports (testing the relay path).
 
 ## File structure (owner = whoever edits)
 

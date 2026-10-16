@@ -36,6 +36,7 @@ impl AppState {
             self.identity.secret_key(),
             self.config.offline,
             self.config.no_relay,
+            self.config.relay_only,
             self.config.iroh_bind,
             &self.config.blobs_dir(),
             self.turn.clone(),
