@@ -13,8 +13,7 @@ use iroh_blobs::BlobsProtocol;
 use iroh_gossip::api::{GossipReceiver, GossipSender};
 use iroh_gossip::{Gossip, TopicId};
 use iroh_tickets::endpoint::EndpointTicket;
-use serde::{Deserialize, Serialize};
-use shared::{Id, Message};
+use shared::Id;
 
 use crate::turn::Turn;
 
@@ -25,12 +24,6 @@ pub const OP_TIMEOUT: Duration = Duration::from_secs(20);
 // SDP offers with audio+video are ~5-10 KB. All peers must agree: the reader rejects larger frames.
 const GOSSIP_MAX_MESSAGE_SIZE: usize = 64 * 1024;
 const MAX_PAYLOAD: usize = GOSSIP_MAX_MESSAGE_SIZE - 1024;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "t", rename_all = "snake_case")]
-pub enum Wire {
-    Message { message: Message },
-}
 
 pub struct IrohNet {
     endpoint: Endpoint,

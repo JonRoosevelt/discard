@@ -9,6 +9,7 @@ mod iroh_net;
 mod media;
 mod retention;
 mod routes;
+mod signed;
 mod sounds;
 mod state;
 mod store;

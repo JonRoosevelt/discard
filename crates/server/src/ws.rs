@@ -12,7 +12,8 @@ use tokio::sync::mpsc;
 
 use crate::error::AppError;
 use crate::hub::ConnId;
-use crate::iroh_net::{IrohNet, Wire, OP_TIMEOUT};
+use crate::iroh_net::{IrohNet, OP_TIMEOUT};
+use crate::signed::{self, Payload, Signed};
 use crate::state::AppState;
 use crate::voice::Envelope;
 
@@ -39,9 +40,13 @@ pub struct TokenQuery {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "f", rename_all = "snake_case")]
 enum Frame {
-    Msg { id: String, message: Message },
-    Env { id: String, envelope: Envelope },
+    Signed(Signed),
     Ack { id: String },
+}
+
+fn signed_frame(state: &AppState, id: String, payload: &Payload) -> Option<Vec<u8>> {
+    let signed = Signed::new(&state.identity.secret_key(), id, payload)?;
+    serde_json::to_vec(&Frame::Signed(signed)).ok()
 }
 
 pub async fn handler(
@@ -349,10 +354,7 @@ pub async fn broadcast_envelope(state: &AppState, channel_id: &Id, envelope: Env
         return;
     }
     let id = hex::encode(rand::random::<[u8; 8]>());
-    if let Ok(bytes) = serde_json::to_vec(&Frame::Env {
-        id: id.clone(),
-        envelope,
-    }) {
+    if let Some(bytes) = signed_frame(state, id.clone(), &Payload::Env { envelope }) {
         net.broadcast_reliable(&workspace_id, id, bytes).await;
     }
 }
@@ -427,10 +429,10 @@ pub async fn publish(state: &AppState, message: Message) {
     let workspace_id = channel.workspace_id;
     ensure_workspace_subscription(state, &workspace_id).await;
     let id = message.id.clone();
-    if let Ok(bytes) = serde_json::to_vec(&Frame::Msg {
-        id: id.clone(),
+    let payload = Payload::Msg {
         message: message.clone(),
-    }) {
+    };
+    if let Some(bytes) = signed_frame(state, id.clone(), &payload) {
         let net = state.net().await;
         net.broadcast_reliable(&workspace_id, id, bytes).await;
     }
@@ -488,9 +490,6 @@ fn spawn_receiver(
         }
         loop {
             match tokio::time::timeout(Duration::from_secs(120), receiver.next()).await {
-                Ok(Some(Ok(Event::Received(msg)))) => {
-                    handle_payload(&state, &channel_id, &workspace_id, msg.content.to_vec()).await;
-                }
                 Ok(Some(Ok(Event::NeighborUp(peer)))) => {
                     state.store.add_peer(&workspace_id, &peer.to_string()).await;
                 }
@@ -539,35 +538,38 @@ fn spawn_workspace_receiver(
     });
 }
 
-async fn handle_payload(state: &AppState, channel_id: &Id, workspace_id: &Id, bytes: Vec<u8>) {
-    if let Ok(Wire::Message { message }) = serde_json::from_slice::<Wire>(&bytes) {
-        handle_message(state, channel_id, workspace_id, message).await;
-    }
-}
-
 async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Vec<u8>) {
-    let frame = match serde_json::from_slice::<Frame>(&bytes) {
-        Ok(frame) => frame,
-        Err(_) => {
-            if let Ok(envelope) = serde_json::from_slice::<Envelope>(&bytes) {
-                handle_voice(state, workspace_id, envelope).await;
-            }
-            return;
-        }
+    // Unsigned frames from older nodes fail to parse here and are dropped.
+    let Ok(frame) = serde_json::from_slice::<Frame>(&bytes) else {
+        return;
     };
     let net = state.net().await;
-    match frame {
-        Frame::Ack { id } => net.ack(&id),
-        Frame::Msg { id, message } => {
-            send_ack(state, workspace_id, &id).await;
-            if net.mark_seen(&id) {
-                let channel_id = message.channel_id.clone();
+    let signed = match frame {
+        Frame::Ack { id } => return net.ack(&id),
+        Frame::Signed(signed) => signed,
+    };
+    let Some((signer, payload)) = signed.open() else {
+        tracing::debug!("dropping frame {} with a bad signature", signed.id);
+        return;
+    };
+    send_ack(state, workspace_id, &signed.id).await;
+    // Checked after verification so a forged frame cannot burn a genuine id.
+    if !net.mark_seen(&signed.id) {
+        return;
+    }
+    match payload {
+        Payload::Msg { message } => {
+            let channel_id = message.channel_id.clone();
+            let in_workspace = matches!(
+                state.store.channel(&channel_id).await,
+                Some(c) if &c.workspace_id == workspace_id
+            );
+            if message.author.id == signer && in_workspace {
                 handle_message(state, &channel_id, workspace_id, message).await;
             }
         }
-        Frame::Env { id, envelope } => {
-            send_ack(state, workspace_id, &id).await;
-            if net.mark_seen(&id) {
+        Payload::Env { envelope } => {
+            if let Some(envelope) = signed::authorize(envelope, &signer) {
                 handle_voice(state, workspace_id, envelope).await;
             }
         }
