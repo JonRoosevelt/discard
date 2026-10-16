@@ -16,6 +16,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 use crate::auth::require_auth;
 use crate::state::AppState;
+use crate::update;
 use crate::ws;
 
 pub fn router(state: AppState) -> Router {
@@ -24,6 +25,8 @@ pub fn router(state: AppState) -> Router {
 
     let api = Router::new()
         .route("/health", get(health))
+        .route("/version", get(update::version))
+        .route("/update", post(update::install))
         .route("/identity", get(identity::get).post(identity::create))
         .route("/identity/backup", get(identity::backup))
         .route("/identity/import", post(identity::import))

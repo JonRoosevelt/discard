@@ -16,6 +16,7 @@ mod state;
 mod store;
 mod ticket;
 mod turn;
+mod update;
 mod voice;
 mod ws;
 
@@ -119,6 +120,7 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&config.addr).await?;
     let url = format!("http://{}/?k={}", config.display_host(), session_token);
     tracing::info!("discard (local node) listening on http://{}", config.addr);
+    tracing::info!("version {}", update::CURRENT);
     tracing::info!("endpoint id = {}", identity.public_id());
     println!("\n  Discard pronto: {url}\n");
 
