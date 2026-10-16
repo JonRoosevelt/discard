@@ -93,6 +93,11 @@ export interface JoinWorkspaceRequest {
 export interface CreateChannelRequest {
   name: string
   kind: ChannelKind
+  id?: Id
+}
+
+export interface RenameRequest {
+  name: string
 }
 
 export interface SendMessageRequest {
@@ -125,7 +130,7 @@ export type ServerEvent =
       workspaces: Workspace[]
       voice: VoicePresence[]
       sounds: Sound[]
-      ice_servers: RTCIceServer[]
+      ice_servers?: RTCIceServer[]
     }
   | { op: 'message'; message: Message }
   | { op: 'typing'; channel_id: Id; user: UserPublic }
@@ -137,3 +142,5 @@ export type ServerEvent =
   | { op: 'sound_play'; channel_id: Id; sound_id: string; by: Id }
   | { op: 'error'; message: string }
   | { op: 'pong' }
+  | { op: 'workspace_updated'; workspace: Workspace }
+  | { op: 'workspace_removed'; workspace_id: Id }

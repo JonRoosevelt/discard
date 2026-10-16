@@ -117,6 +117,13 @@ pub struct JoinWorkspaceRequest {
 pub struct CreateChannelRequest {
     pub name: String,
     pub kind: ChannelKind,
+    #[serde(default)]
+    pub id: Option<Id>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenameRequest {
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,6 +200,8 @@ pub enum ServerEvent {
     SoundPlay { channel_id: Id, sound_id: String, by: Id },
     Error { message: String },
     Pong,
+    WorkspaceUpdated { workspace: Workspace },
+    WorkspaceRemoved { workspace_id: Id },
 }
 
 impl ClientEvent {

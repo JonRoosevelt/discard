@@ -176,11 +176,36 @@ export async function getTicket(id: Id): Promise<string> {
   return res.ticket
 }
 
-export function createChannel(workspaceId: Id, name: string, kind: ChannelKind): Promise<Channel> {
+export function createChannel(
+  workspaceId: Id,
+  name: string,
+  kind: ChannelKind,
+  id: Id,
+): Promise<Channel> {
   return api<Channel>(`/workspaces/${workspaceId}/channels`, {
     method: 'POST',
-    body: JSON.stringify({ name, kind }),
+    body: JSON.stringify({ name, kind, id }),
   })
+}
+
+export function renameWorkspace(id: Id, name: string): Promise<Workspace> {
+  return api<Workspace>(`/workspaces/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) })
+}
+
+export function deleteWorkspace(id: Id): Promise<void> {
+  return api<void>(`/workspaces/${id}`, { method: 'DELETE' })
+}
+
+export function leaveWorkspace(id: Id): Promise<void> {
+  return api<void>(`/workspaces/${id}/leave`, { method: 'POST' })
+}
+
+export function renameChannel(id: Id, name: string): Promise<Channel> {
+  return api<Channel>(`/channels/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) })
+}
+
+export function deleteChannel(id: Id): Promise<void> {
+  return api<void>(`/channels/${id}`, { method: 'DELETE' })
 }
 
 export function getMessages(channelId: Id): Promise<Message[]> {
