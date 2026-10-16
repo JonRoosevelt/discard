@@ -183,7 +183,7 @@ impl Store {
         };
         let op = Op {
             workspace_id: workspace_id.clone(),
-            lamport: record.clock + 1,
+            lamport: record.clock.saturating_add(1),
             target,
         };
         let frame_id = hex::encode(rand::random::<[u8; 8]>());
