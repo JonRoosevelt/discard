@@ -212,7 +212,7 @@ async function selectChannel(id: Id): Promise<void> {
   app.messages = []
   if (prev != null) ws.send({ op: 'unsubscribe', channel_id: prev })
   const channel = channelById(id)
-  if (!channel || channel.kind !== 'text') {
+  if (!channel) {
     refreshMembers()
     return
   }
