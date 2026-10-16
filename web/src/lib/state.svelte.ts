@@ -236,6 +236,9 @@ function handleEvent(ev: ServerEvent): void {
     case 'workspace_removed':
       dropWorkspace(ev.workspace_id)
       break
+    case 'sounds':
+      app.sounds = ev.sounds
+      break
     case 'sound_play':
     case 'signal':
     case 'error':

@@ -44,6 +44,8 @@ pub enum Envelope {
         channel_id: Id,
         sound_id: String,
         by: Id,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sound: Option<crate::signed::Signed>,
     },
 }
 

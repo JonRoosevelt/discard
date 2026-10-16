@@ -336,6 +336,30 @@ impl IrohNet {
         Ok(())
     }
 
+    pub async fn download_capped(&self, hash: &str, peer: EndpointId, max: u64) -> anyhow::Result<()> {
+        use futures_util::StreamExt;
+        use iroh_blobs::api::downloader::DownloadProgressItem as Item;
+        let hash: iroh_blobs::Hash = hash
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid blob hash"))?;
+        let downloader = self.store.downloader(&self.endpoint);
+        let run = async {
+            let mut stream = downloader.download(hash, Some(peer)).stream().await?;
+            while let Some(item) = stream.next().await {
+                match item {
+                    Item::Progress(n) if n > max => anyhow::bail!("blob exceeds {max} bytes"),
+                    Item::Error(e) => return Err(e.into()),
+                    Item::DownloadError => anyhow::bail!("download failed"),
+                    _ => {}
+                }
+            }
+            Ok(())
+        };
+        tokio::time::timeout(OP_TIMEOUT, run)
+            .await
+            .context("download timeout")?
+    }
+
     pub async fn tag_blob(&self, hash: &str) -> anyhow::Result<Vec<u8>> {
         let parsed: iroh_blobs::Hash = hash
             .parse()

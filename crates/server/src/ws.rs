@@ -7,13 +7,14 @@ use axum::response::{IntoResponse, Response};
 use futures_util::{SinkExt, StreamExt};
 use iroh_gossip::api::{Event, GossipReceiver};
 use serde::{Deserialize, Serialize};
-use shared::{ChannelKind, ClientEvent, Id, Message, ServerEvent, UserPublic, VoiceMember};
+use shared::{ChannelKind, ClientEvent, Id, Message, ServerEvent, Sound, UserPublic, VoiceMember};
 use tokio::sync::mpsc;
 
 use crate::error::AppError;
 use crate::hub::ConnId;
 use crate::iroh_net::{IrohNet, OP_TIMEOUT};
 use crate::signed::{self, Payload, Signed};
+use crate::sounds;
 use crate::state::AppState;
 use crate::voice::Envelope;
 
@@ -322,6 +323,10 @@ async fn handle_client_event(
                 channel_id: channel_id.clone(),
                 sound_id: sound_id.clone(),
                 by: by.clone(),
+                sound: match state.sounds.get(&sound_id).await.filter(|s| !s.deleted) {
+                    Some(sound) => state.sounds.edit_of(&sound, &state.identity.secret_key()).await,
+                    None => None,
+                },
             };
             broadcast_envelope(state, &channel_id, envelope).await;
             state.hub.broadcast_all(ServerEvent::SoundPlay {
@@ -546,6 +551,8 @@ fn spawn_workspace_receiver(
                     state.store.add_peer(&workspace_id, &peer.to_string()).await;
                     crate::meta::hello(&state, &workspace_id).await;
                     crate::meta::relay(&state, &workspace_id, None).await;
+                    let (state, workspace_id) = (state.clone(), workspace_id.clone());
+                    tokio::spawn(async move { announce_sounds(&state, &workspace_id).await });
                 }
                 Ok(Some(Ok(_))) => {}
                 Ok(Some(Err(e))) => {
@@ -603,6 +610,80 @@ async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Ve
             if net.add_peer_ticket(&ticket).is_ok_and(|id| id.to_string() == signer) {
                 state.store.add_peer_ticket(workspace_id, signer, ticket).await;
             }
+        }
+        Payload::SoundSet { edit } => ingest_sound(state, &signer, edit).await,
+    }
+}
+
+async fn broadcast_sounds(state: &AppState) {
+    state.hub.broadcast_all(ServerEvent::Sounds {
+        sounds: state.sounds.list().await,
+    });
+}
+
+// `from` is whoever vouched for holding the blob; the edit itself must be signed by its editor
+// so a relaying member cannot forge or alter someone else's change.
+async fn ingest_sound(state: &AppState, from: &Id, edit: Signed) {
+    let Some(sound) = sounds::verify(&edit) else {
+        return;
+    };
+    if let Some(local) = state.sounds.get(&sound.id).await {
+        if (sound.version, &sound.editor) <= (local.version, &local.editor) {
+            return;
+        }
+        if (&sound.owner, &sound.hash) != (&local.owner, &local.hash) {
+            return;
+        }
+    }
+    let net = state.net().await;
+    if !sound.deleted {
+        let Some(peer) = net.parse_peer(from) else {
+            return;
+        };
+        if let Err(e) = net.download_capped(&sound.hash, peer, sounds::MAX_BYTES as u64).await {
+            tracing::debug!("sound download failed: {e}");
+            return;
+        }
+        let _ = net.tag_blob(&sound.hash).await;
+    }
+    let hash = sound.hash.clone();
+    if state.sounds.merge(sound, Some(edit)).await {
+        untag_unused(state, &hash).await;
+        broadcast_sounds(state).await;
+    }
+}
+
+pub async fn untag_unused(state: &AppState, hash: &str) {
+    if !state.sounds.hash_in_use(hash).await {
+        let _ = state.net().await.delete_blob_tag(hash.as_bytes().to_vec()).await;
+    }
+}
+
+async fn announce_sound_in(state: &AppState, workspace_id: &Id, edit: Signed) {
+    ensure_workspace_subscription(state, workspace_id).await;
+    let net = state.net().await;
+    if !net.has_workspace(workspace_id) {
+        return;
+    }
+    let id = hex::encode(rand::random::<[u8; 8]>());
+    if let Some(bytes) = signed_frame(state, id.clone(), &Payload::SoundSet { edit }) {
+        net.broadcast_reliable(workspace_id, id, bytes).await;
+    }
+}
+
+pub async fn announce_sound(state: &AppState, sound: &Sound) {
+    let Some(edit) = state.sounds.edit_of(sound, &state.identity.secret_key()).await else {
+        return;
+    };
+    for workspace in state.store.list().await {
+        announce_sound_in(state, &workspace.id, edit.clone()).await;
+    }
+}
+
+async fn announce_sounds(state: &AppState, workspace_id: &Id) {
+    for sound in state.sounds.all().await {
+        if let Some(edit) = state.sounds.edit_of(&sound, &state.identity.secret_key()).await {
+            announce_sound_in(state, workspace_id, edit).await;
         }
     }
 }
@@ -699,8 +780,13 @@ async fn handle_voice(state: &AppState, workspace_id: &Id, envelope: Envelope) {
                 state.hub.broadcast_all(ServerEvent::Signal { from, data, session });
             }
         }
-        Envelope::Sound { sound_id, by, .. } => {
+        Envelope::Sound { sound_id, by, sound, .. } => {
             if state.voice.local_member(&channel_id).is_some() {
+                if let Some(edit) = sound {
+                    if state.sounds.get(&sound_id).await.is_none() {
+                        ingest_sound(state, &by, edit).await;
+                    }
+                }
                 state.hub.broadcast_all(ServerEvent::SoundPlay {
                     channel_id: channel_id.clone(),
                     sound_id,

@@ -6,7 +6,7 @@ pub mod sounds;
 pub mod uploads;
 pub mod workspaces;
 
-use axum::routing::{get, post};
+use axum::routing::{get, patch, post};
 use axum::{middleware, Json, Router};
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -53,6 +53,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/upload", post(uploads::upload))
         .route("/sounds", get(sounds::list).post(sounds::create))
+        .route("/sounds/{id}", patch(sounds::update).delete(sounds::delete))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             require_auth,

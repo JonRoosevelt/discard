@@ -57,6 +57,8 @@ export interface Sound {
   url: string
   emoji: string
   builtin: boolean
+  owner: string
+  hash: string
 }
 
 export interface VoiceMember {
@@ -140,6 +142,7 @@ export type ServerEvent =
   | { op: 'voice_updated'; channel_id: Id; member: VoiceMember }
   | { op: 'signal'; from: Id; data: SignalData; session?: string | null }
   | { op: 'sound_play'; channel_id: Id; sound_id: string; by: Id }
+  | { op: 'sounds'; sounds: Sound[] }
   | { op: 'error'; message: string }
   | { op: 'pong' }
   | { op: 'workspace_updated'; workspace: Workspace }

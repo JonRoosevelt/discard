@@ -58,7 +58,7 @@ async fn main() -> anyhow::Result<()> {
     let retention = Arc::new(retention::Retention::new());
     let hub = hub::Hub::new();
     let voice = Arc::new(voice::Voice::new());
-    let sounds = sounds::SoundStore::load(config.data_dir.join("sounds.json"));
+    let sounds = sounds::SoundStore::load(config.data_dir.join("sounds.json"), &identity.public_id());
     let session_token = config
         .token_override
         .clone()
