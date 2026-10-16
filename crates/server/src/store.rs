@@ -140,8 +140,20 @@ impl Store {
         workspace_id: &Id,
         name: &str,
         kind: ChannelKind,
+        id: Option<Id>,
     ) -> anyhow::Result<Channel> {
         let mut db = self.db.lock().await;
+        if let Some(id) = &id {
+            let existing = db
+                .workspaces
+                .iter()
+                .find_map(|w| w.channels.iter().find(|c| &c.id == id));
+            match existing {
+                Some(c) if &c.workspace_id == workspace_id => return Ok(c.clone()),
+                Some(_) => anyhow::bail!("channel id already in use"),
+                None => {}
+            }
+        }
         let record = db
             .workspaces
             .iter_mut()
@@ -149,7 +161,7 @@ impl Store {
             .ok_or_else(|| anyhow::anyhow!("workspace not found"))?;
         let position = record.channels.iter().map(|c| c.position).max().unwrap_or(-1) + 1;
         let channel = Channel {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             workspace_id: workspace_id.clone(),
             name: name.to_string(),
             kind,

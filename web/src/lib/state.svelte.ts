@@ -161,7 +161,7 @@ function handleEvent(ev: ServerEvent): void {
         secret: w.secret ?? app.workspaces.find((o) => o.id === w.id)?.secret ?? null,
       }))
       app.sounds = ev.sounds
-      setNodeIceServers(ev.ice_servers)
+      setNodeIceServers(ev.ice_servers ?? [])
       for (const w of ev.workspaces) if (w.secret) void loadKey(w)
       app.voice = ev.voice.filter(
         (v) => app.currentWorkspaceId == null || v.workspace_id === app.currentWorkspaceId,
@@ -285,12 +285,14 @@ async function joinWorkspace(ticket: string): Promise<Workspace> {
   return wsp
 }
 
-async function createChannel(name: string, kind: ChannelKind): Promise<Channel> {
+async function createChannel(name: string, kind: ChannelKind, id: Id): Promise<Channel> {
   const wsId = app.currentWorkspaceId
   if (wsId == null) throw new Error('No workspace selected')
-  const ch = await apiCreateChannel(wsId, name, kind)
+  const ch = await apiCreateChannel(wsId, name, kind, id)
   app.workspaces = app.workspaces.map((w) =>
-    w.id === wsId ? { ...w, channels: [...w.channels, ch] } : w,
+    w.id === wsId && !w.channels.some((c) => c.id === ch.id)
+      ? { ...w, channels: [...w.channels, ch] }
+      : w,
   )
   if (ch.kind === 'text') void selectChannel(ch.id)
   return ch

@@ -157,10 +157,16 @@ pub async fn create_channel(
     if state.store.get(&id).await.is_none() {
         return Err(AppError::NotFound("workspace not found".to_string()));
     }
+    // The client picks the id so a retried or double-sent request lands on the same channel.
+    if let Some(client_id) = &req.id {
+        if uuid::Uuid::parse_str(client_id).is_err() {
+            return Err(AppError::BadRequest("channel id must be a uuid".to_string()));
+        }
+    }
     let channel = state
         .store
-        .add_channel(&id, name, req.kind)
+        .add_channel(&id, name, req.kind, req.id)
         .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
     Ok(Json(channel))
 }

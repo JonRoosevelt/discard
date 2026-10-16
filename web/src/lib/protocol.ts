@@ -93,6 +93,7 @@ export interface JoinWorkspaceRequest {
 export interface CreateChannelRequest {
   name: string
   kind: ChannelKind
+  id?: Id
 }
 
 export interface SendMessageRequest {
@@ -125,7 +126,7 @@ export type ServerEvent =
       workspaces: Workspace[]
       voice: VoicePresence[]
       sounds: Sound[]
-      ice_servers: RTCIceServer[]
+      ice_servers?: RTCIceServer[]
     }
   | { op: 'message'; message: Message }
   | { op: 'typing'; channel_id: Id; user: UserPublic }

@@ -176,10 +176,15 @@ export async function getTicket(id: Id): Promise<string> {
   return res.ticket
 }
 
-export function createChannel(workspaceId: Id, name: string, kind: ChannelKind): Promise<Channel> {
+export function createChannel(
+  workspaceId: Id,
+  name: string,
+  kind: ChannelKind,
+  id: Id,
+): Promise<Channel> {
   return api<Channel>(`/workspaces/${workspaceId}/channels`, {
     method: 'POST',
-    body: JSON.stringify({ name, kind }),
+    body: JSON.stringify({ name, kind, id }),
   })
 }
 

@@ -117,6 +117,8 @@ pub struct JoinWorkspaceRequest {
 pub struct CreateChannelRequest {
     pub name: String,
     pub kind: ChannelKind,
+    #[serde(default)]
+    pub id: Option<Id>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

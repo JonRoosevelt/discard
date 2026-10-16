@@ -6,6 +6,8 @@
   import type { ChannelKind, Id, VoiceMember } from '../lib/protocol'
 
   let creating = $state<ChannelKind | null>(null)
+  let createId = ''
+  let pending = $state(false)
   let name = $state('')
   let error = $state('')
   let invite = $state(false)
@@ -29,6 +31,7 @@
 
   function startCreate(kind: ChannelKind): void {
     creating = kind
+    createId = crypto.randomUUID()
     name = ''
     error = ''
   }
@@ -42,21 +45,23 @@
   async function submit(): Promise<void> {
     const kind = creating
     const n = name.trim()
-    if (!kind) return
+    if (!kind || pending) return
     if (!n) {
       cancel()
       return
     }
+    pending = true
     try {
-      await app.createChannel(n, kind)
+      await app.createChannel(n, kind, createId)
       cancel()
     } catch (e) {
       error = e instanceof Error ? e.message : 'Failed to create channel'
+    } finally {
+      pending = false
     }
   }
 
   function onKeydown(e: KeyboardEvent): void {
-    if (e.key === 'Enter') void submit()
     if (e.key === 'Escape') cancel()
   }
 
@@ -97,6 +102,7 @@
             bind:value={name}
             onkeydown={onKeydown}
             maxlength="40"
+            disabled={pending}
             placeholder="new-channel"
             aria-label="Text channel name"
           />
@@ -133,6 +139,7 @@
             bind:value={name}
             onkeydown={onKeydown}
             maxlength="40"
+            disabled={pending}
             placeholder="new-channel"
             aria-label="Voice channel name"
           />
