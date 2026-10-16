@@ -2,8 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant};
 
-use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
+use dashmap::{DashMap, DashSet};
 use hmac::{Hmac, KeyInit, Mac};
 use iroh::endpoint::Connection;
 use iroh::protocol::{AcceptError, ProtocolHandler};
@@ -12,8 +14,9 @@ use md5::{Digest, Md5};
 use sha1::Sha1;
 use shared::IceServer;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 
 use crate::iroh_net::OP_TIMEOUT;
 
@@ -23,6 +26,14 @@ const REALM: &str = "discard";
 const MAGIC: u32 = 0x2112_A442;
 const LIFETIME: u32 = 600;
 const OUT_QUEUE: usize = 512;
+const MAX_PAYLOAD: usize = 1500;
+const MAX_ALLOCS: usize = 256;
+const MAX_CLIENTS: usize = 64;
+const MAX_AUTH_FAILURES: u8 = 5;
+const UNAUTH_TIMEOUT: Duration = Duration::from_secs(10);
+const FRAGMENT_TTL: Duration = Duration::from_secs(1);
+const PORT_BASE: u16 = 49152;
+const PORT_SPAN: u16 = 16384;
 
 const ALLOCATE: u16 = 0x0003;
 const REFRESH: u16 = 0x0004;
@@ -66,7 +77,8 @@ pub struct Turn {
     endpoint: RwLock<Option<Endpoint>>,
     peers: DashMap<Ipv4Addr, EndpointId>,
     conns: DashMap<EndpointId, Connection>,
-    connecting: DashMap<EndpointId, ()>,
+    connecting: DashSet<EndpointId>,
+    slots: Arc<Semaphore>,
     allocs: DashMap<u16, Arc<Alloc>>,
     next_port: AtomicU16,
     next_seq: AtomicU16,
@@ -102,16 +114,32 @@ impl Turn {
             endpoint: RwLock::new(None),
             peers: DashMap::new(),
             conns: DashMap::new(),
-            connecting: DashMap::new(),
+            connecting: DashSet::new(),
+            slots: Arc::new(Semaphore::new(MAX_CLIENTS)),
             allocs: DashMap::new(),
-            next_port: AtomicU16::new(49152),
+            next_port: AtomicU16::new(0),
             next_seq: AtomicU16::new(0),
         });
         tracing::info!("turn listening on 127.0.0.1:{}", turn.port);
         let accept = turn.clone();
         tokio::spawn(async move {
-            while let Ok((stream, addr)) = listener.accept().await {
-                tokio::spawn(accept.clone().serve_client(stream, addr));
+            loop {
+                match listener.accept().await {
+                    Ok((stream, addr)) => {
+                        let Ok(slot) = accept.slots.clone().try_acquire_owned() else {
+                            continue;
+                        };
+                        let turn = accept.clone();
+                        tokio::spawn(async move {
+                            turn.serve_client(stream, addr).await;
+                            drop(slot);
+                        });
+                    }
+                    Err(e) => {
+                        tracing::warn!("turn accept failed: {e}");
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
             }
         });
         Ok(turn)
@@ -167,44 +195,51 @@ impl Turn {
             addr,
             out,
             alloc: None,
+            expires: Instant::now(),
+            auth_failures: 0,
         };
         let mut buf = vec![0u8; 4];
         loop {
-            if reader.read_exact(&mut buf[..4]).await.is_err() {
-                break;
-            }
-            let len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
-            let total = match buf[0] {
-                0x00..=0x3F => 20 + len,
-                0x40..=0x4F => 4 + len.div_ceil(4) * 4,
-                _ => break,
+            let deadline = match client.alloc {
+                Some(_) => client.expires,
+                None => Instant::now() + UNAUTH_TIMEOUT,
             };
-            buf.resize(total, 0);
-            if reader.read_exact(&mut buf[4..]).await.is_err() {
+            let read =
+                tokio::time::timeout_at(deadline.into(), read_message(&mut reader, &mut buf));
+            let Ok(Some(len)) = read.await else {
                 break;
-            }
+            };
             if buf[0] >= 0x40 {
                 client.channel_data(&buf[..4 + len]);
             } else if let Some(msg) = Msg::parse(&buf) {
-                client.handle(&buf, msg).await;
+                if !client.handle(&buf, msg).await {
+                    break;
+                }
             }
-            buf.truncate(4);
         }
         if let Some((port, _)) = client.alloc {
             self.allocs.remove(&port);
         }
     }
 
-    fn allocate_port(&self) -> u16 {
-        loop {
-            let port = self.next_port.fetch_add(1, Ordering::Relaxed).max(49152);
-            if !self.allocs.contains_key(&port) {
-                return port;
+    fn allocate_port(&self, alloc: &Arc<Alloc>) -> Option<u16> {
+        if self.allocs.len() >= MAX_ALLOCS {
+            return None;
+        }
+        for _ in 0..PORT_SPAN {
+            let port = PORT_BASE + self.next_port.fetch_add(1, Ordering::Relaxed) % PORT_SPAN;
+            if let Entry::Vacant(slot) = self.allocs.entry(port) {
+                slot.insert(alloc.clone());
+                return Some(port);
             }
         }
+        None
     }
 
     fn forward(self: &Arc<Self>, peer: SocketAddrV4, src_port: u16, payload: &[u8]) {
+        if payload.len() > MAX_PAYLOAD {
+            return;
+        }
         let Some(id) = self.known_peer(*peer.ip()) else {
             return;
         };
@@ -230,7 +265,7 @@ impl Turn {
     }
 
     fn connect(self: &Arc<Self>, id: EndpointId) {
-        if self.connecting.insert(id, ()).is_some() {
+        if !self.connecting.insert(id) {
             return;
         }
         let Some(endpoint) = self.endpoint() else {
@@ -277,6 +312,11 @@ impl Turn {
 
 impl ProtocolHandler for Turn {
     async fn accept(&self, connection: Connection) -> Result<(), AcceptError> {
+        let remote = connection.remote_id();
+        if self.known_peer(virtual_ip(&remote)) != Some(remote) {
+            connection.close(0u32.into(), b"unknown peer");
+            return Ok(());
+        }
         self.pump(connection).await;
         Ok(())
     }
@@ -314,6 +354,8 @@ struct Client {
     addr: SocketAddr,
     out: mpsc::Sender<Vec<u8>>,
     alloc: Option<(u16, Arc<Alloc>)>,
+    expires: Instant,
+    auth_failures: u8,
 }
 
 impl Client {
@@ -328,27 +370,28 @@ impl Client {
         }
     }
 
-    async fn handle(&mut self, raw: &[u8], msg: Msg) {
+    async fn handle(&mut self, raw: &[u8], msg: Msg) -> bool {
         if msg.typ == SEND {
             let (Some((port, alloc)), Some(peer), Some(data)) = (
                 &self.alloc,
                 msg.attr(A_PEER).and_then(parse_xor_addr),
                 msg.attr(A_DATA),
             ) else {
-                return;
+                return true;
             };
             if alloc.perms.lock().unwrap().contains(peer.ip()) {
                 self.turn.forward(peer, *port, data);
             }
-            return;
+            return true;
         }
         if !matches!(
             msg.typ,
             ALLOCATE | REFRESH | CREATE_PERMISSION | CHANNEL_BIND
         ) {
-            return;
+            return true;
         }
         if !self.authenticated(raw, &msg) {
+            self.auth_failures += 1;
             let attrs = [
                 (A_ERROR, error_code(401, "Unauthorized")),
                 (A_REALM, REALM.as_bytes().to_vec()),
@@ -356,8 +399,9 @@ impl Client {
             ];
             self.reply(encode(msg.typ | 0x0110, &msg.tid, &attrs, None))
                 .await;
-            return;
+            return self.auth_failures < MAX_AUTH_FAILURES;
         }
+        self.auth_failures = 0;
         let result = match msg.typ {
             ALLOCATE => self.allocate(&msg),
             REFRESH => self.refresh(&msg),
@@ -374,6 +418,7 @@ impl Client {
             ),
         };
         self.reply(buf).await;
+        true
     }
 
     async fn reply(&self, buf: Vec<u8>) {
@@ -391,18 +436,23 @@ impl Client {
         if self.alloc.is_some() {
             return Err((437, "Allocation Mismatch"));
         }
-        if msg.attr(A_TRANSPORT).and_then(|v| v.first()) != Some(&17) {
-            return Err((442, "Unsupported Transport Protocol"));
+        match msg.attr(A_TRANSPORT).and_then(|v| v.first()) {
+            None => return Err((400, "Bad Request")),
+            Some(17) => {}
+            Some(_) => return Err((442, "Unsupported Transport Protocol")),
         }
         let endpoint = self.turn.endpoint().ok_or((508, "Insufficient Capacity"))?;
-        let port = self.turn.allocate_port();
         let alloc = Arc::new(Alloc {
             perms: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             out: self.out.clone(),
         });
-        self.turn.allocs.insert(port, alloc.clone());
+        let port = self
+            .turn
+            .allocate_port(&alloc)
+            .ok_or((508, "Insufficient Capacity"))?;
         self.alloc = Some((port, alloc));
+        self.expires = Instant::now() + Duration::from_secs(LIFETIME.into());
         let relayed = SocketAddrV4::new(virtual_ip(&endpoint.id()), port);
         let mapped = match self.addr {
             SocketAddr::V4(a) => a,
@@ -426,6 +476,8 @@ impl Client {
         if lifetime == 0 {
             self.turn.allocs.remove(port);
             self.alloc = None;
+        } else {
+            self.expires = Instant::now() + Duration::from_secs(lifetime.into());
         }
         Ok(vec![(A_LIFETIME, lifetime.to_be_bytes().to_vec())])
     }
@@ -512,34 +564,42 @@ fn frames(dst_port: u16, src_port: u16, seq: u16, payload: &[u8], max: usize) ->
         .collect()
 }
 
+type Fragment = (u8, Vec<u8>, Instant);
+
 #[derive(Default)]
 struct Reassembly {
-    pending: HashMap<(u16, u16, u16), (u8, Vec<u8>)>,
+    pending: HashMap<(u16, u16, u16), Fragment>,
 }
 
 impl Reassembly {
     fn push(&mut self, d: &[u8]) -> Option<(u16, u16, Vec<u8>)> {
+        self.push_at(d, Instant::now())
+    }
+
+    fn push_at(&mut self, d: &[u8], now: Instant) -> Option<(u16, u16, Vec<u8>)> {
+        self.pending
+            .retain(|_, (_, _, t)| now.duration_since(*t) < FRAGMENT_TTL);
         let dst = u16::from_be_bytes([*d.get(1)?, *d.get(2)?]);
         let src = u16::from_be_bytes([*d.get(3)?, *d.get(4)?]);
         match d[0] {
-            WHOLE => Some((dst, src, d[5..].to_vec())),
-            HALF if d.len() >= 8 => {
+            WHOLE if d.len() - 5 <= MAX_PAYLOAD => Some((dst, src, d[5..].to_vec())),
+            HALF if (8..=8 + MAX_PAYLOAD).contains(&d.len()) => {
                 let key = (dst, src, u16::from_be_bytes([d[5], d[6]]));
                 let part = d[7];
                 match self.pending.remove(&key) {
-                    Some((other, mut first)) if other != part => {
+                    Some((other, mut first, _)) if other != part => {
                         if part == 0 {
                             first.splice(0..0, d[8..].iter().copied());
                         } else {
                             first.extend_from_slice(&d[8..]);
                         }
-                        Some((dst, src, first))
+                        (first.len() <= MAX_PAYLOAD).then_some((dst, src, first))
                     }
                     _ => {
                         if self.pending.len() >= 64 {
                             self.pending.clear();
                         }
-                        self.pending.insert(key, (part, d[8..].to_vec()));
+                        self.pending.insert(key, (part, d[8..].to_vec(), now));
                         None
                     }
                 }
@@ -603,8 +663,25 @@ impl Msg {
         };
         let mut head = raw[..at].to_vec();
         head[2..4].copy_from_slice(&((at - 20 + 24) as u16).to_be_bytes());
-        hmac_sha1(key, &head).as_slice() == expected
+        let mut mac =
+            <Hmac<Sha1> as KeyInit>::new_from_slice(key).expect("hmac accepts any key size");
+        mac.update(&head);
+        mac.verify_slice(expected).is_ok()
     }
+}
+
+async fn read_message(reader: &mut OwnedReadHalf, buf: &mut Vec<u8>) -> Option<usize> {
+    buf.resize(4, 0);
+    reader.read_exact(&mut buf[..4]).await.ok()?;
+    let len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
+    let total = match buf[0] {
+        0x00..=0x3F => 20 + len,
+        0x40..=0x4F => 4 + len.div_ceil(4) * 4,
+        _ => return None,
+    };
+    buf.resize(total, 0);
+    reader.read_exact(&mut buf[4..]).await.ok()?;
+    Some(len)
 }
 
 fn hmac_sha1(key: &[u8], data: &[u8]) -> Vec<u8> {
@@ -707,6 +784,19 @@ mod tests {
         assert_eq!(halves.len(), 2);
         assert!(halves.iter().all(|f| f.len() <= 1162));
         assert_eq!(r.push(&halves[1]), None);
-        assert_eq!(r.push(&halves[0]), Some((1, 2, payload)));
+        assert_eq!(r.push(&halves[0]), Some((1, 2, payload.clone())));
+
+        let big = vec![0u8; MAX_PAYLOAD + 1];
+        assert_eq!(r.push(&frames(1, 2, 6, &big, 2000)[0]), None);
+        let oversize = frames(1, 2, 7, &vec![0u8; 2 * MAX_PAYLOAD], 1162);
+        assert_eq!(r.push(&oversize[0]), None);
+        assert_eq!(r.push(&oversize[1]), None);
+        assert!(r.pending.is_empty());
+
+        let now = Instant::now();
+        let halves = frames(1, 2, 9, &payload, 1162);
+        assert_eq!(r.push_at(&halves[0], now), None);
+        assert_eq!(r.push_at(&halves[1], now + FRAGMENT_TTL * 2), None);
+        assert_eq!(r.pending.len(), 1);
     }
 }
