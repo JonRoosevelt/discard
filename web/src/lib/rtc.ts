@@ -254,7 +254,9 @@ export class VoiceSession {
         }
         break
       case 'voice_left':
-        if (ev.channel_id === this.channelId) this.drop(ev.user_id)
+        if (ev.channel_id === this.channelId && this.pcs.get(ev.user_id)?.pc.connectionState !== 'connected') {
+          this.drop(ev.user_id)
+        }
         break
       default:
         break
@@ -320,7 +322,7 @@ export class VoiceSession {
       this.peerState(id).conn = pc.connectionState
       console.log('[rtc] pc', id.slice(0, 8), '->', pc.connectionState, 'ice:', pc.iceConnectionState)
       if (pc.connectionState === 'failed') {
-        this.drop(id)
+        void this.restartIce(peer)
         return
       }
       this.updateConnected()
@@ -334,6 +336,24 @@ export class VoiceSession {
     }
     this.peerState(id).stream = stream
     return peer
+  }
+
+  private async restartIce(peer: Peer): Promise<void> {
+    peer.pc.restartIce()
+    setTimeout(() => {
+      if (this.pcs.get(peer.id) === peer && peer.pc.connectionState === 'failed') this.drop(peer.id)
+    }, 15000)
+    if (this.selfId > peer.id) return
+    try {
+      peer.makingOffer = true
+      const offer = await peer.pc.createOffer({ iceRestart: true })
+      await peer.pc.setLocalDescription(offer)
+      this.sendSignal(peer.id, { kind: 'offer', sdp: offer.sdp ?? '' })
+    } catch (e) {
+      console.error('[rtc] restartIce error', e)
+    } finally {
+      peer.makingOffer = false
+    }
   }
 
   private async startOffer(peerId: Id): Promise<void> {
