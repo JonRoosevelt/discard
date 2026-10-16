@@ -114,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    let shutdown_state = state.clone();
     let app = routes::router(state);
     let listener = tokio::net::TcpListener::bind(&config.addr).await?;
     let url = format!("http://{}/?k={}", config.display_host(), session_token);
@@ -125,8 +126,23 @@ async fn main() -> anyhow::Result<()> {
         open_browser(&url);
     }
 
-    axum::serve(listener, app).await?;
+    tokio::select! {
+        served = axum::serve(listener, app) => served?,
+        _ = shutdown_signal() => {}
+    }
+    // Closing the endpoint tells peers we left; otherwise they hold the dead connection until it
+    // idles out and ignore our gossip rejoin after a quick restart.
+    shutdown_state.net().await.shutdown().await;
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .expect("install SIGTERM handler");
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {}
+        _ = term.recv() => {}
+    }
 }
 
 fn open_browser(url: &str) {

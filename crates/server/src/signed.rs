@@ -14,6 +14,7 @@ pub enum Payload {
     Msg { message: Message },
     Env { envelope: Envelope },
     Op { op: Op },
+    Hello { ticket: String },
 }
 
 // The payload travels as a JSON string so the signature covers the exact bytes the author

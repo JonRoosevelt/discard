@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use shared::{Channel, Id, ServerEvent};
 
-use crate::signed::Signed;
+use crate::signed::{Payload, Signed};
 use crate::state::AppState;
 use crate::store::WorkspaceRecord;
 use crate::ws;
@@ -139,12 +139,26 @@ pub async fn relay(state: &AppState, workspace_id: &Id, only_author: Option<&str
     }
 }
 
+// Lets peers persist a dialable address for us, so whoever restarts can bootstrap from them.
+pub async fn hello(state: &AppState, workspace_id: &Id) {
+    let net = state.net().await;
+    let payload = Payload::Hello {
+        ticket: net.endpoint_ticket(),
+    };
+    let id = hex::encode(rand::random::<[u8; 8]>());
+    if let Some(bytes) = ws::signed_frame(state, id, &payload) {
+        let _ = net.broadcast_workspace(workspace_id, bytes).await;
+    }
+}
+
 // Deleted workspaces stay subscribed so their tombstone keeps reaching members that were away.
 // ponytail: tombstones are never collected; add an expiry if they ever pile up.
 pub async fn tick(state: &AppState) {
     let me = state.identity.public_id();
     for record in state.store.all().await {
         ws::ensure_workspace_subscription(state, &record.id).await;
+        ws::rejoin_workspace(state, &record.id).await;
+        hello(state, &record.id).await;
         relay(state, &record.id, Some(&me)).await;
     }
 }
@@ -201,6 +215,7 @@ mod tests {
             ticket: String::new(),
             channels: Vec::new(),
             peers: Vec::new(),
+            peer_tickets: Default::default(),
             owner_endpoint_ticket: None,
             clock: 0,
             deleted: false,

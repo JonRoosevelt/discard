@@ -23,13 +23,17 @@ async fn owner_bootstrap(state: &AppState, net: &IrohNet, workspace_id: &Id) -> 
     let Some(record) = state.store.record(workspace_id).await else {
         return Vec::new();
     };
-    let Some(ticket) = record.owner_endpoint_ticket else {
-        return Vec::new();
-    };
-    match net.add_peer_ticket(&ticket) {
-        Ok(id) if id != net.endpoint_id() => vec![id],
-        _ => Vec::new(),
+    // The owner's own ticket points at itself after a restart, so known members are dialed too.
+    let mut ids = Vec::new();
+    for ticket in record.owner_endpoint_ticket.iter().chain(record.peer_tickets.values()) {
+        if let Ok(id) = net.add_peer_ticket(ticket) {
+            if id != net.endpoint_id() && !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
     }
+    ids.truncate(8);
+    ids
 }
 
 #[derive(Debug, Deserialize)]
@@ -460,6 +464,18 @@ pub async fn ensure_subscription(state: &AppState, channel_id: &Id) {
     }
 }
 
+// Gossip only dials bootstrap peers once, at subscribe time; this retries for peers that were down.
+pub async fn rejoin_workspace(state: &AppState, workspace_id: &Id) {
+    let net = state.net().await;
+    let Some(sender) = net.workspace_sender(workspace_id) else {
+        return;
+    };
+    let peers = owner_bootstrap(state, &net, workspace_id).await;
+    if !peers.is_empty() {
+        let _ = tokio::time::timeout(OP_TIMEOUT, sender.join_peers(peers)).await;
+    }
+}
+
 pub async fn ensure_workspace_subscription(state: &AppState, workspace_id: &Id) {
     let net = state.net().await;
     if net.has_workspace(workspace_id) {
@@ -515,10 +531,9 @@ fn spawn_workspace_receiver(
     workspace_id: Id,
     mut receiver: GossipReceiver,
 ) {
+    // No joined() wait: it discards events until the first NeighborUp, swallowing that
+    // NeighborUp (which triggers our state exchange) and anything received before it.
     tokio::spawn(async move {
-        if tokio::time::timeout(OP_TIMEOUT, receiver.joined()).await.is_err() {
-            tracing::debug!("gossip join timed out for workspace {workspace_id}");
-        }
         loop {
             if state.store.record(&workspace_id).await.is_none() {
                 break;
@@ -529,6 +544,7 @@ fn spawn_workspace_receiver(
                 }
                 Ok(Some(Ok(Event::NeighborUp(peer)))) => {
                     state.store.add_peer(&workspace_id, &peer.to_string()).await;
+                    crate::meta::hello(&state, &workspace_id).await;
                     crate::meta::relay(&state, &workspace_id, None).await;
                 }
                 Ok(Some(Ok(_))) => {}
@@ -582,6 +598,11 @@ async fn handle_workspace_payload(state: &AppState, workspace_id: &Id, bytes: Ve
         }
         Payload::Op { op } => {
             crate::meta::apply(state, workspace_id, signer, op, signed).await;
+        }
+        Payload::Hello { ticket } => {
+            if net.add_peer_ticket(&ticket).is_ok_and(|id| id.to_string() == signer) {
+                state.store.add_peer_ticket(workspace_id, signer, ticket).await;
+            }
         }
     }
 }

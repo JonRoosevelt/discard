@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -22,6 +23,8 @@ pub struct WorkspaceRecord {
     pub channels: Vec<Channel>,
     #[serde(default)]
     pub peers: Vec<String>,
+    #[serde(default)]
+    pub peer_tickets: BTreeMap<Id, String>,
     #[serde(default)]
     pub owner_endpoint_ticket: Option<String>,
     #[serde(default)]
@@ -234,6 +237,16 @@ impl Store {
             .find(|w| &w.id == workspace_id)
             .map(|w| w.peers.clone())
             .unwrap_or_default()
+    }
+
+    pub async fn add_peer_ticket(&self, workspace_id: &Id, endpoint_id: Id, ticket: String) {
+        let mut db = self.db.lock().await;
+        if let Some(record) = db.workspaces.iter_mut().find(|w| &w.id == workspace_id) {
+            if record.peer_tickets.get(&endpoint_id) != Some(&ticket) {
+                record.peer_tickets.insert(endpoint_id, ticket);
+                Self::persist(&self.path, &db);
+            }
+        }
     }
 
     pub async fn add_peer(&self, workspace_id: &Id, endpoint_id: &str) {
