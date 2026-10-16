@@ -96,6 +96,10 @@ export interface CreateChannelRequest {
   id?: Id
 }
 
+export interface RenameRequest {
+  name: string
+}
+
 export interface SendMessageRequest {
   content: string
   attachment_ids: Id[]
@@ -138,3 +142,5 @@ export type ServerEvent =
   | { op: 'sound_play'; channel_id: Id; sound_id: string; by: Id }
   | { op: 'error'; message: string }
   | { op: 'pong' }
+  | { op: 'workspace_updated'; workspace: Workspace }
+  | { op: 'workspace_removed'; workspace_id: Id }

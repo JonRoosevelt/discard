@@ -6,6 +6,11 @@ import {
   Identity,
   createChannel as apiCreateChannel,
   createWorkspace as apiCreateWorkspace,
+  deleteChannel as apiDeleteChannel,
+  deleteWorkspace as apiDeleteWorkspace,
+  leaveWorkspace as apiLeaveWorkspace,
+  renameChannel as apiRenameChannel,
+  renameWorkspace as apiRenameWorkspace,
   getMessages,
   joinWorkspace as apiJoinWorkspace,
   listSounds,
@@ -117,6 +122,34 @@ function upsertWorkspace(wsp: Workspace): void {
   else app.workspaces = [...app.workspaces, wsp]
 }
 
+function applyWorkspace(wsp: Workspace): void {
+  const prev = app.workspaces.find((w) => w.id === wsp.id)
+  if (!prev) return
+  upsertWorkspace({ ...wsp, secret: wsp.secret ?? prev.secret })
+  const current = app.currentChannelId
+  if (app.currentWorkspaceId !== wsp.id || current == null) return
+  if (wsp.channels.some((c) => c.id === current)) return
+  ws.send({ op: 'unsubscribe', channel_id: current })
+  app.currentChannelId = null
+  app.messages = []
+  selectWorkspace(wsp.id)
+}
+
+function dropWorkspace(id: Id): void {
+  if (!app.workspaces.some((w) => w.id === id)) return
+  app.workspaces = app.workspaces.filter((w) => w.id !== id)
+  contentKeys.delete(id)
+  if (app.currentWorkspaceId !== id) return
+  if (app.currentChannelId != null) ws.send({ op: 'unsubscribe', channel_id: app.currentChannelId })
+  app.currentWorkspaceId = null
+  app.currentChannelId = null
+  app.messages = []
+  app.voice = []
+  const next = app.workspaces[0]
+  if (next) selectWorkspace(next.id)
+  else refreshMembers()
+}
+
 function upsertPresence(p: VoicePresence): void {
   if (app.currentWorkspaceId != null && p.workspace_id !== app.currentWorkspaceId) return
   const i = app.voice.findIndex((v) => v.channel_id === p.channel_id)
@@ -197,6 +230,12 @@ function handleEvent(ev: ServerEvent): void {
       }
       break
     }
+    case 'workspace_updated':
+      applyWorkspace(ev.workspace)
+      break
+    case 'workspace_removed':
+      dropWorkspace(ev.workspace_id)
+      break
     case 'sound_play':
     case 'signal':
     case 'error':
@@ -298,6 +337,36 @@ async function createChannel(name: string, kind: ChannelKind, id: Id): Promise<C
   return ch
 }
 
+async function renameWorkspace(id: Id, name: string): Promise<void> {
+  applyWorkspace(await apiRenameWorkspace(id, name))
+}
+
+async function deleteWorkspace(id: Id): Promise<void> {
+  await apiDeleteWorkspace(id)
+  dropWorkspace(id)
+}
+
+async function leaveWorkspace(id: Id): Promise<void> {
+  await apiLeaveWorkspace(id)
+  dropWorkspace(id)
+}
+
+function patchChannels(workspaceId: Id, f: (channels: Channel[]) => Channel[]): void {
+  const w = app.workspaces.find((x) => x.id === workspaceId)
+  if (w) applyWorkspace({ ...w, channels: f(w.channels) })
+}
+
+async function renameChannel(id: Id, name: string): Promise<void> {
+  const ch = await apiRenameChannel(id, name)
+  patchChannels(ch.workspace_id, (cs) => cs.map((c) => (c.id === ch.id ? ch : c)))
+}
+
+async function deleteChannel(id: Id): Promise<void> {
+  const ch = channelById(id)
+  await apiDeleteChannel(id)
+  if (ch) patchChannels(ch.workspace_id, (cs) => cs.filter((c) => c.id !== id))
+}
+
 let booting = false
 
 async function bootstrap(): Promise<void> {
@@ -346,6 +415,11 @@ export const app = $state({
   createWorkspace,
   joinWorkspace,
   createChannel,
+  renameWorkspace,
+  deleteWorkspace,
+  leaveWorkspace,
+  renameChannel,
+  deleteChannel,
   appendMessage,
 })
 

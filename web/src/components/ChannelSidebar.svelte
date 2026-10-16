@@ -3,7 +3,31 @@
   import { shortPublicId } from '../lib/identity'
   import { avatarColor, initials } from '../lib/format'
   import InviteDialog from './InviteDialog.svelte'
+  import ActionDialog from './ActionDialog.svelte'
   import type { ChannelKind, Id, VoiceMember } from '../lib/protocol'
+
+  type Dialog = {
+    kind: 'rename-ws' | 'delete-ws' | 'leave-ws' | 'rename-ch' | 'delete-ch'
+    id: Id
+    name: string
+  }
+
+  let menuOpen = $state(false)
+  let menuBtn = $state<HTMLButtonElement>()
+  let menuEl = $state<HTMLDivElement>()
+  let dialog = $state<Dialog | null>(null)
+
+  function openDialog(d: Dialog): void {
+    menuOpen = false
+    dialog = d
+  }
+
+  function onWindowMouseDown(event: MouseEvent): void {
+    if (!menuOpen) return
+    const target = event.target as Node
+    if (menuEl?.contains(target) || menuBtn?.contains(target)) return
+    menuOpen = false
+  }
 
   let creating = $state<ChannelKind | null>(null)
   let createId = ''
@@ -70,15 +94,48 @@
   }
 </script>
 
+<svelte:window onmousedown={onWindowMouseDown} />
+
 <aside class="sidebar">
   <header class="ws-header">
     <h1>{workspace?.name ?? 'Discard'}</h1>
     {#if workspace}
-      <button class="icon" aria-label="Workspace invite" title="Invite" onclick={() => (invite = true)}>
-        ✚
-      </button>
+      <div class="head-actions">
+        <button class="icon" aria-label="Workspace invite" title="Invite" onclick={() => (invite = true)}>
+          ✚
+        </button>
+        <button
+          bind:this={menuBtn}
+          class="icon"
+          aria-label="Workspace settings"
+          title="Workspace settings"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onclick={() => (menuOpen = !menuOpen)}
+        >
+          ⋯
+        </button>
+      </div>
     {/if}
   </header>
+
+  {#if menuOpen && workspace}
+    <div bind:this={menuEl} class="menu" role="menu">
+      <button role="menuitem" onclick={() => openDialog({ kind: 'rename-ws', id: workspace.id, name: workspace.name })}>
+        Rename workspace
+      </button>
+      <button role="menuitem" onclick={() => openDialog({ kind: 'leave-ws', id: workspace.id, name: workspace.name })}>
+        Leave workspace
+      </button>
+      <button
+        role="menuitem"
+        class="danger"
+        onclick={() => openDialog({ kind: 'delete-ws', id: workspace.id, name: workspace.name })}
+      >
+        Delete workspace
+      </button>
+    </div>
+  {/if}
 
 {#if workspace}
   <div class="sections">
@@ -109,13 +166,16 @@
         </form>
       {/if}
       {#each textChannels as ch (ch.id)}
-        <button
-          class="chan"
-          class:active={ch.id === app.currentChannelId}
-          onclick={() => app.selectChannel(ch.id)}
-        >
-          <span class="glyph">#</span><span class="label">{ch.name}</span>
-        </button>
+        <div class="row">
+          <button
+            class="chan"
+            class:active={ch.id === app.currentChannelId}
+            onclick={() => app.selectChannel(ch.id)}
+          >
+            <span class="glyph">#</span><span class="label">{ch.name}</span>
+          </button>
+          {@render rowActions(ch.id, ch.name)}
+        </div>
       {/each}
     </section>
 
@@ -146,13 +206,16 @@
         </form>
       {/if}
       {#each voiceChannels as ch (ch.id)}
-        <button
-          class="chan"
-          class:active={ch.id === app.currentChannelId}
-          onclick={() => app.selectChannel(ch.id)}
-        >
-          <span class="glyph">🔊</span><span class="label">{ch.name}</span>
-        </button>
+        <div class="row">
+          <button
+            class="chan"
+            class:active={ch.id === app.currentChannelId}
+            onclick={() => app.selectChannel(ch.id)}
+          >
+            <span class="glyph">🔊</span><span class="label">{ch.name}</span>
+          </button>
+          {@render rowActions(ch.id, ch.name)}
+        </div>
         {#each membersOf(ch.id) as vm (vm.user.id)}
           <div class="voice-member">
             <span class="dot" style="background: {avatarColor(vm.user.display_name)}"></span>
@@ -189,12 +252,82 @@
   </footer>
 </aside>
 
+{#snippet rowActions(id: Id, name: string)}
+  <span class="row-actions">
+    <button
+      class="mini"
+      aria-label="Rename channel {name}"
+      title="Rename"
+      onclick={() => openDialog({ kind: 'rename-ch', id, name })}
+    >
+      ✎
+    </button>
+    <button
+      class="mini"
+      aria-label="Delete channel {name}"
+      title="Delete"
+      onclick={() => openDialog({ kind: 'delete-ch', id, name })}
+    >
+      ✕
+    </button>
+  </span>
+{/snippet}
+
 {#if invite}
   <InviteDialog onclose={() => (invite = false)} />
 {/if}
 
+{#if dialog}
+  {@const d = dialog}
+  {#if d.kind === 'rename-ws'}
+    <ActionDialog
+      title="Rename workspace"
+      value={d.name}
+      confirmLabel="Save"
+      onconfirm={(v) => app.renameWorkspace(d.id, v)}
+      onclose={() => (dialog = null)}
+    />
+  {:else if d.kind === 'leave-ws'}
+    <ActionDialog
+      title="Leave workspace"
+      message={`Leave "${d.name}"? It is removed from this device only. You can rejoin with an invite ticket.`}
+      confirmLabel="Leave workspace"
+      danger
+      onconfirm={() => app.leaveWorkspace(d.id)}
+      onclose={() => (dialog = null)}
+    />
+  {:else if d.kind === 'delete-ws'}
+    <ActionDialog
+      title="Delete workspace"
+      message={`Delete "${d.name}" for every member? Its channels go with it. This cannot be undone.`}
+      confirmLabel="Delete workspace"
+      danger
+      onconfirm={() => app.deleteWorkspace(d.id)}
+      onclose={() => (dialog = null)}
+    />
+  {:else if d.kind === 'rename-ch'}
+    <ActionDialog
+      title="Rename channel"
+      value={d.name}
+      confirmLabel="Save"
+      onconfirm={(v) => app.renameChannel(d.id, v)}
+      onclose={() => (dialog = null)}
+    />
+  {:else}
+    <ActionDialog
+      title="Delete channel"
+      message={`Delete "${d.name}" for every member? This cannot be undone.`}
+      confirmLabel="Delete channel"
+      danger
+      onconfirm={() => app.deleteChannel(d.id)}
+      onclose={() => (dialog = null)}
+    />
+  {/if}
+{/if}
+
 <style>
   .sidebar {
+    position: relative;
     display: flex;
     flex-direction: column;
     background: var(--bg-1);
@@ -210,6 +343,84 @@
     padding: 0 8px 0 14px;
     border-bottom: 1px solid var(--bg-0);
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  }
+
+  .head-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+  }
+
+  .menu {
+    position: absolute;
+    top: 52px;
+    right: 8px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    min-width: 190px;
+    padding: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--bg-3);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+
+  .menu button {
+    background: transparent;
+    border: none;
+    color: var(--text-1);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .menu button:hover {
+    background: var(--bg-3);
+    color: var(--text-0);
+  }
+
+  .menu button.danger {
+    color: var(--danger);
+  }
+
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .row-actions {
+    position: absolute;
+    right: 4px;
+    display: none;
+    gap: 2px;
+  }
+
+  .row:hover .row-actions,
+  .row:focus-within .row-actions {
+    display: flex;
+  }
+
+  .mini {
+    background: transparent;
+    border: none;
+    color: var(--text-2);
+    font-size: 12px;
+    line-height: 1;
+    padding: 4px;
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+
+  .mini:hover {
+    color: var(--text-0);
+    background: var(--bg-3);
   }
 
   .empty-ws {
