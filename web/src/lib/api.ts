@@ -194,6 +194,24 @@ export function postMessage(channelId: Id, content: string, attachmentIds: Id[] 
   })
 }
 
+export interface VersionInfo {
+  current: string
+  latest: string | null
+  update_available: boolean
+  notes_url: string
+  installable: boolean
+  status: 'idle' | 'downloading' | 'installing' | 'restarting' | 'error'
+  error: string | null
+}
+
+export function getVersion(refresh = false): Promise<VersionInfo> {
+  return api<VersionInfo>(refresh ? '/version?refresh=true' : '/version')
+}
+
+export function installUpdate(): Promise<{ status: string }> {
+  return api<{ status: string }>('/update', { method: 'POST' })
+}
+
 export function listSounds(): Promise<Sound[]> {
   return api<Sound[]>('/sounds')
 }

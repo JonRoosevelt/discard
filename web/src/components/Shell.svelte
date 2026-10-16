@@ -7,6 +7,7 @@
   import ChannelSidebar from './ChannelSidebar.svelte'
   import ChatView from './ChatView.svelte'
   import VoicePanel from './VoicePanel.svelte'
+  import UpdateBanner from './UpdateBanner.svelte'
 
   onMount(() => {
     if (app.identity == null) void app.bootstrap()
@@ -34,6 +35,7 @@
     <ChannelSidebar />
     <ChatView />
     {#if inCall}<VoicePanel />{/if}
+    <UpdateBanner />
   </div>
 {:else}
   <Login />

@@ -28,7 +28,7 @@ jobs:
 
       - name: Package macOS
         run: |
-          [ "$GITHUB_REF_TYPE" = tag ] && export VERSION="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] && export VERSION="${GITHUB_REF_NAME#v}" DISCARD_VERSION="${GITHUB_REF_NAME#v}"
           bash scripts/package-macos.sh
 
       - uses: actions/upload-artifact@v4
@@ -54,7 +54,7 @@ jobs:
 
       - name: Package Linux
         run: |
-          [ "$GITHUB_REF_TYPE" = tag ] && export VERSION="${GITHUB_REF_NAME#v}"
+          [ "$GITHUB_REF_TYPE" = tag ] && export VERSION="${GITHUB_REF_NAME#v}" DISCARD_VERSION="${GITHUB_REF_NAME#v}"
           bash scripts/package-linux.sh
 
       - uses: actions/upload-artifact@v4
