@@ -39,7 +39,10 @@ export interface PeerState {
 export interface VoiceSessionOptions {
   selfId: Id
   onChange?: (session: VoiceSession) => void
+  onViewer?: (peerId: Id) => void
 }
+
+type PeerMessage = { t: 'viewing'; on: boolean }
 
 interface Peer {
   id: Id
@@ -47,6 +50,7 @@ interface Peer {
   stream: MediaStream
   audioSender: RTCRtpSender | null
   videoSender: RTCRtpSender | null
+  channel: RTCDataChannel | null
   polite: boolean
   makingOffer: boolean
   ignoreOffer: boolean
@@ -60,6 +64,7 @@ export class VoiceSession {
   localStream: MediaStream | null = null
   screenStream: MediaStream | null = null
   readonly peers = new Map<Id, PeerState>()
+  readonly viewers = new Set<Id>()
   connected = false
   muted = false
   deafened = false
@@ -68,6 +73,8 @@ export class VoiceSession {
   error: string | null = null
 
   private readonly onChange?: (session: VoiceSession) => void
+  private readonly onViewer?: (peerId: Id) => void
+  private viewing: Id | null = null
   private readonly pcs = new Map<Id, Peer>()
   private readonly remoteSessions = new Map<Id, string>()
   private unsubscribe: (() => void) | null = null
@@ -79,6 +86,7 @@ export class VoiceSession {
   constructor(opts: VoiceSessionOptions) {
     this.selfId = opts.selfId
     this.onChange = opts.onChange
+    this.onViewer = opts.onViewer
   }
 
   async join(channelId: Id, peerIds: readonly Id[] = []): Promise<void> {
@@ -126,6 +134,8 @@ export class VoiceSession {
     this.pcs.clear()
     this.remoteSessions.clear()
     this.peers.clear()
+    this.viewers.clear()
+    this.viewing = null
     if (this.micTrack) {
       this.micTrack.stop()
       this.micTrack = null
@@ -221,11 +231,53 @@ export class VoiceSession {
       return
     }
     this.screen = false
+    this.viewers.clear()
     if (this.screenTrack) this.screenTrack.stop()
     if (this.screenStream) this.screenStream.getTracks().forEach((t) => t.stop())
     this.screenTrack = null
     this.screenStream = null
     await this.applyVideoTrack(this.video ? this.videoTrack : null)
+    this.notify()
+  }
+
+  setViewing(peerId: Id | null): void {
+    if (peerId === this.viewing) return
+    if (this.viewing) this.sendPeer(this.viewing, { t: 'viewing', on: false })
+    this.viewing = peerId
+    if (peerId) this.sendPeer(peerId, { t: 'viewing', on: true })
+  }
+
+  private sendPeer(id: Id, msg: PeerMessage): void {
+    const channel = this.pcs.get(id)?.channel
+    if (channel?.readyState === 'open') channel.send(JSON.stringify(msg))
+  }
+
+  private attachChannel(peer: Peer, channel: RTCDataChannel): void {
+    peer.channel = channel
+    channel.onopen = () => {
+      if (this.viewing === peer.id) this.sendPeer(peer.id, { t: 'viewing', on: true })
+    }
+    channel.onmessage = (e) => {
+      if (this.pcs.get(peer.id) !== peer) return
+      let msg: PeerMessage
+      try {
+        msg = JSON.parse(String(e.data)) as PeerMessage
+      } catch {
+        return
+      }
+      if (msg.t === 'viewing') this.setViewer(peer.id, msg.on === true)
+    }
+  }
+
+  private setViewer(id: Id, on: boolean): void {
+    if (on && this.screen && !this.viewers.has(id)) {
+      this.viewers.add(id)
+      this.onViewer?.(id)
+    } else if (!on && this.viewers.has(id)) {
+      this.viewers.delete(id)
+    } else {
+      return
+    }
     this.notify()
   }
 
@@ -314,6 +366,7 @@ export class VoiceSession {
       stream,
       audioSender: null,
       videoSender: null,
+      channel: null,
       polite: this.selfId > id,
       makingOffer: false,
       ignoreOffer: false,
@@ -339,6 +392,7 @@ export class VoiceSession {
       this.updateConnected()
       this.notify()
     }
+    pc.ondatachannel = (e) => this.attachChannel(peer, e.channel)
     pc.ontrack = (e) => {
       console.log('[rtc] ontrack', id.slice(0, 8), e.track.kind)
       if (!stream.getTracks().some((t) => t.id === e.track.id)) stream.addTrack(e.track)
@@ -375,6 +429,7 @@ export class VoiceSession {
     const video = peer.pc.addTransceiver('video', { direction: 'sendrecv' })
     peer.audioSender = audio.sender
     peer.videoSender = video.sender
+    this.attachChannel(peer, peer.pc.createDataChannel('discard'))
     if (this.micTrack) await audio.sender.replaceTrack(this.micTrack)
     const outgoing = this.screenTrack ?? this.videoTrack
     if (outgoing) await video.sender.replaceTrack(outgoing)
@@ -502,6 +557,7 @@ export class VoiceSession {
       void 0
     }
     this.pcs.delete(id)
+    this.viewers.delete(id)
     this.updateConnected()
     this.notify()
   }
@@ -517,6 +573,7 @@ export class VoiceSession {
       this.pcs.delete(id)
     }
     this.peers.delete(id)
+    this.viewers.delete(id)
     this.updateConnected()
     this.notify()
   }

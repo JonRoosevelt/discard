@@ -43,9 +43,7 @@
       {#if channel}
         <span class="glyph">{channel.kind === 'text' ? '#' : '🔊'}</span>
         <strong>{channel.name}</strong>
-        {#if channel.kind === 'text'}
-          <span class="ephemeral" title="Messages disappear after 24h">24h</span>
-        {/if}
+        <span class="ephemeral" title="Messages disappear after 24h">24h</span>
       {/if}
     </div>
     <div class="actions">
@@ -75,7 +73,31 @@
           <h2>No channel selected</h2>
           <p>Choose a channel in the sidebar to chat.</p>
         </div>
-      {:else if channel.kind === 'text'}
+      {:else}
+        {#if channel.kind === 'voice' && !selfInVoice}
+          <div class="voice">
+            {#if voiceMembers.length === 0}
+              <p>Nobody here yet.</p>
+            {:else}
+              <div class="grid">
+                {#each voiceMembers as vm (vm.user.id)}
+                  <div class="card">
+                    <span class="avatar" style="background: {avatarColor(vm.user.display_name)}">
+                      {initials(vm.user.display_name)}
+                    </span>
+                    <span class="name">{vm.user.display_name}</span>
+                    <span class="flags">
+                      {#if vm.muted}🔇{/if}
+                      {#if vm.deafened}🔈{/if}
+                      {#if vm.video}📹{/if}
+                      {#if vm.screen}🖥️{/if}
+                    </span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
         <MessageList />
         <div class="typing">
           {#if typers.length > 0}
@@ -87,35 +109,6 @@
           {/if}
         </div>
         <Composer />
-      {:else}
-        <div class="voice">
-          <h2>{channel.name}</h2>
-          {#if voiceMembers.length === 0}
-            <p>Nobody here yet.</p>
-          {:else}
-            <div class="grid">
-              {#each voiceMembers as vm (vm.user.id)}
-                <div class="card">
-                  <span class="avatar" style="background: {avatarColor(vm.user.display_name)}">
-                    {initials(vm.user.display_name)}
-                  </span>
-                  <span class="name">{vm.user.display_name}</span>
-                  <span class="flags">
-                    {#if vm.muted}🔇{/if}
-                    {#if vm.deafened}🔈{/if}
-                    {#if vm.video}📹{/if}
-                    {#if vm.screen}🖥️{/if}
-                  </span>
-                </div>
-              {/each}
-            </div>
-          {/if}
-          {#if selfInVoice}
-            <button class="primary danger" onclick={leave}>Leave channel</button>
-          {:else}
-            <button class="primary" onclick={join}>Join voice channel</button>
-          {/if}
-        </div>
       {/if}
     </div>
 
@@ -294,20 +287,19 @@
   }
 
   .voice {
-    flex: 1;
+    flex: none;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
+    gap: 12px;
     color: var(--text-2);
     text-align: center;
-    padding: 24px;
+    padding: 16px;
+    border-bottom: 1px solid var(--bg-0);
   }
 
-  .voice h2 {
+  .voice p {
     margin: 0;
-    color: var(--text-0);
   }
 
   .grid {

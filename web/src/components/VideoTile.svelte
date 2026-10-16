@@ -11,6 +11,10 @@
     deafened?: boolean
     hasVideo?: boolean
     conn?: string
+    spotlit?: boolean
+    compact?: boolean
+    watchers?: string[]
+    onselect?: () => void
   }
 
   let {
@@ -23,6 +27,10 @@
     deafened = false,
     hasVideo = false,
     conn = '',
+    spotlit = false,
+    compact = false,
+    watchers = [],
+    onselect,
   }: Props = $props()
 
   let el = $state<HTMLVideoElement>()
@@ -37,9 +45,27 @@
     void hasVideo
     if (el && stream) void el.play().catch(() => {})
   })
+
+  function onKeydown(e: KeyboardEvent): void {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    onselect?.()
+  }
 </script>
 
-<div class="tile" class:novideo={!hasVideo}>
+<div
+  class="tile"
+  class:novideo={!hasVideo}
+  class:spotlit
+  class:compact
+  class:screen
+  role="button"
+  tabindex="0"
+  aria-pressed={spotlit}
+  aria-label={spotlit ? `Return to grid from ${name}` : `Focus ${name}`}
+  onclick={() => onselect?.()}
+  onkeydown={onKeydown}
+>
   <video bind:this={el} autoplay playsinline muted={local || deafened}></video>
 
   {#if !hasVideo}
@@ -48,6 +74,10 @@
 
   {#if status}
     <span class="conn">{status}</span>
+  {/if}
+
+  {#if watchers.length > 0}
+    <span class="watchers" title="Watching your screen">👁 {watchers.join(', ')}</span>
   {/if}
 
   <div class="bar">
@@ -70,6 +100,30 @@
     overflow: hidden;
     display: grid;
     place-items: center;
+    cursor: pointer;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+  }
+
+  .tile:hover {
+    outline-color: var(--bg-3);
+  }
+
+  .tile:focus-visible {
+    outline-color: var(--accent);
+  }
+
+  .tile.spotlit {
+    aspect-ratio: auto;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+  }
+
+  .tile.compact {
+    flex: none;
+    height: 100%;
+    aspect-ratio: 16 / 9;
   }
 
   video {
@@ -77,6 +131,10 @@
     height: 100%;
     object-fit: cover;
     display: block;
+  }
+
+  .screen video {
+    object-fit: contain;
   }
 
   .novideo video {
@@ -103,6 +161,21 @@
     background: rgba(0, 0, 0, 0.6);
     color: var(--text-2);
     font-size: 10px;
+  }
+
+  .watchers {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    max-width: calc(100% - 8px);
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--text-0);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .bar {

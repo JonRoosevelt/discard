@@ -3,9 +3,32 @@
   import { app } from '../lib/state.svelte'
   import { ws } from '../lib/ws'
   import { VoiceSession } from '../lib/rtc'
+  import { playCue } from '../lib/cues'
   import VideoTile from './VideoTile.svelte'
   import Soundboard from './Soundboard.svelte'
-  import type { Channel } from '../lib/protocol'
+  import type { Channel, Id } from '../lib/protocol'
+
+  interface Props {
+    stage?: boolean
+  }
+
+  interface TileView {
+    key: Id
+    stream: MediaStream | null
+    name: string
+    local: boolean
+    micMuted: boolean
+    video: boolean
+    screen: boolean
+    deafened: boolean
+    hasVideo: boolean
+    conn: string
+    watchers: string[]
+  }
+
+  const SELF = 'self'
+
+  let { stage = false }: Props = $props()
 
   let session = $state<VoiceSession | null>(null)
   let tick = $state(0)
@@ -13,6 +36,10 @@
   let deafened = $state(false)
   let camOn = $state(false)
   let screenOn = $state(false)
+  let spotlight = $state<Id | null>(null)
+  let showBoard = $state(false)
+  let knownChannel: Id | null = null
+  let knownOthers = new Set<Id>()
 
   onDestroy(() => session?.leave())
 
@@ -61,6 +88,43 @@
     return !!localPreview && localPreview.getVideoTracks().length > 0
   })
 
+  let watchers = $derived.by(() => {
+    void tick
+    const ids = session?.viewers ?? new Set<Id>()
+    return others.filter((m) => ids.has(m.user.id)).map((m) => m.user.display_name)
+  })
+
+  let views = $derived.by((): TileView[] => [
+    {
+      key: SELF,
+      stream: localPreview,
+      name: app.identity?.display_name ?? 'You',
+      local: true,
+      micMuted: !micOn,
+      video: camOn,
+      screen: screenOn,
+      deafened: false,
+      hasVideo: localHasVideo,
+      conn: '',
+      watchers,
+    },
+    ...tiles.map((tile) => ({
+      key: tile.member.user.id,
+      stream: tile.stream,
+      name: tile.member.user.display_name,
+      local: false,
+      micMuted: tile.member.muted,
+      video: tile.member.video,
+      screen: tile.member.screen,
+      deafened,
+      hasVideo: tile.hasVideo,
+      conn: tile.conn,
+      watchers: [],
+    })),
+  ])
+
+  let focused = $derived(stage ? (views.find((v) => v.key === spotlight) ?? null) : null)
+
   let connected = $derived.by(() => {
     void tick
     return session?.connected ?? false
@@ -100,6 +164,9 @@
       onChange: () => {
         tick += 1
       },
+      onViewer: () => {
+        if (!deafened) playCue('viewing')
+      },
     })
     session = next
     micOn = !muted
@@ -123,6 +190,26 @@
       screenOn = active.screen
       update()
     }
+  })
+
+  $effect(() => {
+    const channel = myPresence?.channel_id ?? null
+    const ids = new Set(others.map((m) => m.user.id))
+    if (channel !== knownChannel) {
+      knownChannel = channel
+      knownOthers = ids
+      return
+    }
+    const joined = [...ids].some((id) => !knownOthers.has(id))
+    const left = [...knownOthers].some((id) => !ids.has(id))
+    knownOthers = ids
+    if (deafened) return
+    if (joined) playCue('join')
+    else if (left) playCue('leave')
+  })
+
+  $effect(() => {
+    session?.setViewing(focused && !focused.local && focused.screen ? focused.key : null)
   })
 
   function update(): void {
@@ -165,13 +252,46 @@
     update()
   }
 
+  function select(key: Id): void {
+    if (!stage) {
+      spotlight = key
+      if (myPresence) void app.selectChannel(myPresence.channel_id)
+      return
+    }
+    spotlight = spotlight === key ? null : key
+  }
+
+  function onWindowKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Escape' && focused && !e.defaultPrevented) spotlight = null
+  }
+
   function leave(): void {
     const presence = myPresence
     if (presence) ws.send({ op: 'voice_leave', channel_id: presence.channel_id })
   }
 </script>
 
-<aside class="panel" aria-label="Voice">
+<svelte:window onkeydown={onWindowKeydown} />
+
+{#snippet tile(view: TileView, compact: boolean)}
+  <VideoTile
+    stream={view.stream}
+    name={view.name}
+    local={view.local}
+    micMuted={view.micMuted}
+    video={view.video}
+    screen={view.screen}
+    deafened={view.deafened}
+    hasVideo={view.hasVideo}
+    conn={view.conn}
+    watchers={view.watchers}
+    spotlit={focused?.key === view.key}
+    {compact}
+    onselect={() => select(view.key)}
+  />
+{/snippet}
+
+<section class={stage ? 'stage' : 'panel'} aria-label="Voice">
   {#if !myPresence}
     <div class="empty">
       <span class="empty-icon">🎧</span>
@@ -192,33 +312,38 @@
       <p class="error">{mediaError}</p>
     {/if}
 
-    <div class="grid">
-      <VideoTile
-        stream={localPreview}
-        name={app.identity?.display_name ?? 'You'}
-        local={true}
-        micMuted={!micOn}
-        video={camOn}
-        screen={screenOn}
-        hasVideo={localHasVideo}
-      />
-      {#each tiles as tile (tile.member.user.id)}
-        <VideoTile
-          stream={tile.stream}
-          name={tile.member.user.display_name}
-          micMuted={tile.member.muted}
-          video={tile.member.video}
-          screen={tile.member.screen}
-          deafened={deafened}
-          hasVideo={tile.hasVideo}
-          conn={tile.conn}
-        />
-      {/each}
-    </div>
+    {#if focused}
+      <div class="focus">
+        {@render tile(focused, false)}
+        <button
+          class="unfocus"
+          aria-label="Return to grid"
+          title="Return to grid (Esc)"
+          onclick={() => (spotlight = null)}
+        >
+          ✕
+        </button>
+      </div>
+      {#if views.length > 1}
+        <div class="strip">
+          {#each views as view (view.key)}
+            {#if view.key !== focused.key}{@render tile(view, true)}{/if}
+          {/each}
+        </div>
+      {/if}
+    {:else}
+      <div class="grid">
+        {#each views as view (view.key)}
+          {@render tile(view, false)}
+        {/each}
+      </div>
+    {/if}
 
-    <div class="soundboard">
-      <Soundboard />
-    </div>
+    {#if !stage || showBoard}
+      <div class="soundboard">
+        <Soundboard />
+      </div>
+    {/if}
 
     <div class="controls">
       <button
@@ -261,12 +386,24 @@
       >
         🖥️
       </button>
+      {#if stage}
+        <button
+          class="ctl"
+          class:on={showBoard}
+          aria-pressed={showBoard}
+          aria-label={showBoard ? 'Hide soundboard' : 'Show soundboard'}
+          title={showBoard ? 'Hide soundboard' : 'Show soundboard'}
+          onclick={() => (showBoard = !showBoard)}
+        >
+          🎵
+        </button>
+      {/if}
       <button class="ctl danger" aria-label="Leave voice channel" title="Leave" onclick={leave}>
         ✖
       </button>
     </div>
   {/if}
-</aside>
+</section>
 
 <style>
   .panel {
@@ -275,6 +412,65 @@
     min-height: 0;
     background: var(--bg-1);
     border-left: 1px solid var(--bg-0);
+  }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: var(--bg-0);
+  }
+
+  .stage .head {
+    background: var(--bg-2);
+  }
+
+  .stage .grid {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    align-content: center;
+  }
+
+  .stage .grid :global(.tile) {
+    aspect-ratio: 16 / 9;
+  }
+
+  .focus {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    padding: 12px 12px 0;
+  }
+
+  .unfocus {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--text-0);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .unfocus:hover {
+    background: rgba(0, 0, 0, 0.85);
+  }
+
+  .strip {
+    flex: none;
+    height: 104px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    overflow-x: auto;
   }
 
   .empty {

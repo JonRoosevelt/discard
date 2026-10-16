@@ -13,7 +13,11 @@
   })
 
   let selfId = $derived(app.identity?.public_id ?? '')
-  let inCall = $derived(app.voice.some((p) => p.members.some((m) => m.user.id === selfId)))
+  let myVoiceChannel = $derived(
+    app.voice.find((p) => p.members.some((m) => m.user.id === selfId))?.channel_id ?? null,
+  )
+  let inCall = $derived(myVoiceChannel != null)
+  let stage = $derived(inCall && app.currentChannelId === myVoiceChannel)
 </script>
 
 {#if !hasSession()}
@@ -29,11 +33,11 @@
 {:else if !app.booted}
   <div class="gate"><p class="hint">Connecting to the local node…</p></div>
 {:else if app.entered}
-  <div class="shell" class:incall={inCall}>
+  <div class="shell" class:incall={inCall} class:stage>
     <WorkspaceRail />
     <ChannelSidebar />
     <ChatView />
-    {#if inCall}<VoicePanel />{/if}
+    {#if inCall}<VoicePanel {stage} />{/if}
   </div>
 {:else}
   <Login />
@@ -52,9 +56,22 @@
     grid-template-columns: 72px 240px minmax(0, 1fr) 320px;
   }
 
+  /* order moves the chat after the stage without remounting VoicePanel, which owns the call */
+  .shell.stage :global(.chat) {
+    order: 1;
+    border-left: 1px solid var(--bg-0);
+  }
+
+  .shell.incall.stage {
+    grid-template-columns: 72px 240px minmax(0, 1fr) 340px;
+  }
+
   @media (max-width: 1100px) {
     .shell.incall {
       grid-template-columns: 72px 220px minmax(0, 1fr) 280px;
+    }
+    .shell.incall.stage {
+      grid-template-columns: 72px 220px minmax(0, 1fr) 300px;
     }
   }
 
@@ -66,6 +83,17 @@
     .shell :global(.panel) {
       display: none;
     }
+    .shell.incall.stage {
+      grid-template-columns: 72px 200px minmax(0, 1fr);
+      grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+    }
+    .shell.stage :global(.rail),
+    .shell.stage :global(.sidebar) {
+      grid-row: 1 / -1;
+    }
+    .shell.stage :global(.chat) {
+      grid-column: 3;
+    }
   }
 
   @media (max-width: 520px) {
@@ -75,6 +103,12 @@
     }
     .shell :global(.sidebar) {
       display: none;
+    }
+    .shell.incall.stage {
+      grid-template-columns: 64px minmax(0, 1fr);
+    }
+    .shell.stage :global(.chat) {
+      grid-column: 2;
     }
   }
 
