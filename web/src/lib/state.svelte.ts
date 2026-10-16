@@ -155,7 +155,10 @@ function handleEvent(ev: ServerEvent): void {
   switch (ev.op) {
     case 'ready':
       app.identity = ev.identity
-      app.workspaces = ev.workspaces
+      app.workspaces = ev.workspaces.map((w) => ({
+        ...w,
+        secret: w.secret ?? app.workspaces.find((o) => o.id === w.id)?.secret ?? null,
+      }))
       app.sounds = ev.sounds
       for (const w of ev.workspaces) if (w.secret) void loadKey(w)
       app.voice = ev.voice.filter(

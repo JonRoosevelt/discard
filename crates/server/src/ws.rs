@@ -58,7 +58,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (tx, mut rx) = mpsc::unbounded_channel::<ServerEvent>();
     let conn = state.hub.register(tx);
 
-    let workspaces = state.store.list().await;
+    let workspaces = state.store.list_with_secrets().await;
     let workspace_ids: Vec<Id> = workspaces.iter().map(|w| w.id.clone()).collect();
     let ready = ServerEvent::Ready {
         identity: state.identity.shared(),

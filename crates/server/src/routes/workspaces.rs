@@ -16,15 +16,7 @@ fn with_secret(mut wsp: Workspace, secret: String) -> Workspace {
 }
 
 pub async fn list(State(state): State<AppState>) -> AppResult<Json<Vec<Workspace>>> {
-    let items = state.store.list().await;
-    let mut out = Vec::with_capacity(items.len());
-    for wsp in items {
-        match state.store.record(&wsp.id).await {
-            Some(record) => out.push(with_secret(wsp, record.secret)),
-            None => out.push(wsp),
-        }
-    }
-    Ok(Json(out))
+    Ok(Json(state.store.list_with_secrets().await))
 }
 
 pub async fn create(

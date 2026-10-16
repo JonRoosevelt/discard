@@ -91,6 +91,17 @@ impl Store {
         db.workspaces.iter().map(|w| w.to_workspace()).collect()
     }
 
+    pub async fn list_with_secrets(&self) -> Vec<Workspace> {
+        let db = self.db.lock().await;
+        db.workspaces
+            .iter()
+            .map(|w| Workspace {
+                secret: Some(w.secret.clone()),
+                ..w.to_workspace()
+            })
+            .collect()
+    }
+
     pub async fn get(&self, id: &Id) -> Option<Workspace> {
         let db = self.db.lock().await;
         db.workspaces
